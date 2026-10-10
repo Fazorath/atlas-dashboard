@@ -1,0 +1,287 @@
+@import "tailwindcss";
+
+/* Atlas's whole look lives here. Components never name a colour, a radius or a
+   font — they name a token, so retuning the app is editing this file.
+
+   Two ideas do most of the work:
+
+   1. Every area of the app owns one accent. A card built for that area sits on
+      a dark tint of its accent and spends the full accent only on its title,
+      icon and data marks, so the colour tells you where you are before you read
+      a word.
+
+   2. The accent is inherited, not passed. A `data-accent` attribute rebinds
+      --accent and friends for its whole subtree, and the Tailwind aliases below
+      are declared `inline` so utilities compile to `var(--accent)` rather than a
+      baked hex. That means `text-accent` on a ring, a chip or a chart bar means
+      "whatever area I am inside", with no per-accent class maps. */
+
+:root {
+  /* Neutrals */
+  --bg: #0b0e14; /* page background */
+  --surface: #151a23; /* neutral cards */
+  --surface-2: #1c2230; /* nested rows, tab bar, inactive chips */
+  --border-subtle: #272e3f; /* tab bar outline only */
+  --divider: #222938; /* row dividers inside cards */
+  --text: #f2f4f8;
+  --text-muted: #9aa3b5;
+  /* The spec's #6b7489 reads 3.72:1 on --surface, under the 4.5:1 the
+     acceptance list asks for. Lifted ~7% so the week strip's future dates
+     clear it; still a clear tier below --text-muted. */
+  --text-dim: #788299; /* future dates, disabled */
+
+  /* Accents: full colour / card tint / ring or track / soft text on the tint */
+  --sleep: #9b8cff;
+  --sleep-tint: #1e1b3a;
+  --sleep-track: #3a3470;
+  --sleep-soft: #b9b1e8;
+  /* Sleep stages are ordinal — Fitbit's own depth order — so they are one
+     violet ramp, not four hues, and Sleep keeps its single accent. Validated
+     as an ordinal ramp (monotone lightness, >=0.06 steps, darkest end 2.7:1)
+     on both --sleep-tint and --surface. The hypnogram's rows encode the same
+     order by position, so colour is never the only signal. */
+  --stage-deep: #5b47e0;
+  --stage-light: #8f7dff;
+  --stage-rem: #b9adff;
+  --stage-awake: #e6e1ff;
+
+  --habits: #3ddc97;
+  --habits-tint: #12291f;
+  --habits-track: #1d4632;
+  --habits-soft: #a6cdb9;
+
+  --due: #ff6b81;
+  --due-tint: #2f1920;
+  --due-track: #4a2530;
+  --due-soft: #ff8fa0;
+
+  --money: #ffb547;
+  --money-tint: #2e2414;
+  --money-track: #4a3a1e;
+  --money-soft: #dcc7a0;
+
+  --weather: #5cc8ff;
+  --weather-tint: #10263a;
+  --weather-track: #16324a;
+  --weather-soft: #a9c9de;
+
+  /* Status chip text sits lighter than the accent so 13px copy clears 4.5:1
+     against the tint it is printed on. */
+  --live-text: #7fe8b8;
+  --setup-text: #ffcf85;
+  --idle-dot: #5a6378;
+  --check-outline: #343c50;
+
+  /* Spacing */
+  --gap-grid-desktop: 20px;
+  --gap-grid-phone: 12px;
+  --pad-card-desktop: 24px;
+  --pad-card-phone: 16px;
+  --page-pad-desktop: 28px 48px 40px;
+  --page-pad-phone: 28px 18px 0;
+  --touch-min: 44px;
+
+  /* Default accent: Today's violet doubles as the brand. */
+  --accent: var(--sleep);
+  --accent-tint: var(--sleep-tint);
+  --accent-track: var(--sleep-track);
+  --accent-soft: var(--sleep-soft);
+}
+
+[data-accent="sleep"] {
+  --accent: var(--sleep);
+  --accent-tint: var(--sleep-tint);
+  --accent-track: var(--sleep-track);
+  --accent-soft: var(--sleep-soft);
+}
+
+[data-accent="habits"] {
+  --accent: var(--habits);
+  --accent-tint: var(--habits-tint);
+  --accent-track: var(--habits-track);
+  --accent-soft: var(--habits-soft);
+}
+
+[data-accent="due"] {
+  --accent: var(--due);
+  --accent-tint: var(--due-tint);
+  --accent-track: var(--due-track);
+  --accent-soft: var(--due-soft);
+}
+
+[data-accent="money"] {
+  --accent: var(--money);
+  --accent-tint: var(--money-tint);
+  --accent-track: var(--money-track);
+  --accent-soft: var(--money-soft);
+}
+
+[data-accent="weather"] {
+  --accent: var(--weather);
+  --accent-tint: var(--weather-tint);
+  --accent-track: var(--weather-track);
+  --accent-soft: var(--weather-soft);
+}
+
+/* Radius. Declared here rather than in :root so `rounded-card-lg` exists as a
+   utility and `var(--radius-card-lg)` still resolves in hand-written CSS. */
+@theme {
+  --radius-card-lg: 32px; /* desktop cards */
+  --radius-card: 26px; /* phone cards */
+  --radius-row: 18px; /* rows nested inside cards */
+  --radius-chip: 14px; /* icon squares, small tiles */
+  --radius-pill: 999px;
+
+  /* The two widths the spec turns on: `lap` is where the phone tab bar gives
+     way to the desktop pill nav, `desk` is where the grid opens to 4 columns. */
+  --breakpoint-lap: 900px;
+  --breakpoint-desk: 1180px;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border-subtle: var(--border-subtle);
+  --color-divider: var(--divider);
+
+  /* `fg` rather than `text` so the utility reads `text-fg-muted`. */
+  --color-fg: var(--text);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-dim: var(--text-dim);
+
+  --color-sleep: var(--sleep);
+  --color-sleep-tint: var(--sleep-tint);
+  --color-sleep-track: var(--sleep-track);
+  --color-sleep-soft: var(--sleep-soft);
+  --color-stage-deep: var(--stage-deep);
+  --color-stage-light: var(--stage-light);
+  --color-stage-rem: var(--stage-rem);
+  --color-stage-awake: var(--stage-awake);
+
+  --color-habits: var(--habits);
+  --color-habits-tint: var(--habits-tint);
+  --color-habits-track: var(--habits-track);
+  --color-habits-soft: var(--habits-soft);
+
+  --color-due: var(--due);
+  --color-due-tint: var(--due-tint);
+  --color-due-track: var(--due-track);
+  --color-due-soft: var(--due-soft);
+
+  --color-money: var(--money);
+  --color-money-tint: var(--money-tint);
+  --color-money-track: var(--money-track);
+  --color-money-soft: var(--money-soft);
+
+  --color-weather: var(--weather);
+  --color-weather-tint: var(--weather-tint);
+  --color-weather-track: var(--weather-track);
+  --color-weather-soft: var(--weather-soft);
+
+  /* Inherited from the nearest [data-accent]. */
+  --color-accent: var(--accent);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-track: var(--accent-track);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-live-text: var(--live-text);
+  --color-setup-text: var(--setup-text);
+  --color-idle-dot: var(--idle-dot);
+  --color-check-outline: var(--check-outline);
+
+  --font-sans: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    background-color: var(--bg);
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Values update in place, so digits must not reflow the line. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Small uppercase structural label: dates, "LISTENING", section eyebrows. */
+  .eyebrow {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* Focus always answers in the colour of the area you are in. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--accent-track);
+    color: var(--text);
+  }
+}
+
+@layer components {
+  /* Press feedback for anything tappable that is shaped like a card or row. */
+  .pressable {
+    transition:
+      transform 120ms ease-out,
+      filter 180ms ease-out;
+  }
+
+  .pressable:active {
+    transform: scale(0.98);
+  }
+
+  @media (hover: hover) {
+    .pressable:hover {
+      filter: brightness(1.08);
+    }
+  }
+
+  /* Rings and bars ease to their new value rather than snapping. */
+  .value-transition {
+    transition:
+      stroke-dasharray 400ms ease-out,
+      width 400ms ease-out;
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .pressable:active {
+    transform: none;
+  }
+}

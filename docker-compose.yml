@@ -1,0 +1,114 @@
+# Atlas — personal life dashboard. Fourth compose project on arcanum,
+# alongside `nas`, `securo`, and `study-web`.
+#   docker compose -f /srv/atlas/docker-compose.yml ps
+#
+# Every service and container is `atlas-`-prefixed on purpose: this stack joins
+# securo_default and nas_default as external networks, and securo already owns
+# the container names `backend`, `db`, and `redis` there. A bare `db` collides.
+#
+# Nothing is published beyond 127.0.0.1 — `tailscale serve --https=8446` is the
+# only way in, same pattern as securo's frontend and study-web.
+name: atlas
+
+services:
+  atlas-db:
+    image: docker.io/library/postgres:17-alpine
+    container_name: atlas-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-atlas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-atlas}
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atlas} -d ${POSTGRES_DB:-atlas}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  atlas-api:
+    build:
+      context: ./backend
+    image: atlas-api:local
+    container_name: atlas-api
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-atlas}:${POSTGRES_PASSWORD}@atlas-db:5432/${POSTGRES_DB:-atlas}
+      TZ: ${TZ:-America/New_York}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Phase 2+ — unset is fine, each source reports "not configured".
+      WEATHER_LAT: ${WEATHER_LAT:-}
+      WEATHER_LON: ${WEATHER_LON:-}
+      SECURO_BASE_URL: ${SECURO_BASE_URL:-http://backend:8000}
+      SECURO_EMAIL: ${SECURO_EMAIL:-}
+      SECURO_PASSWORD: ${SECURO_PASSWORD:-}
+      SECURO_WORKSPACE_ID: ${SECURO_WORKSPACE_ID:-}
+      ABS_BASE_URL: ${ABS_BASE_URL:-http://audiobookshelf:80}
+      ABS_TOKEN: ${ABS_TOKEN:-}
+      ABS_PUBLIC_URL: ${ABS_PUBLIC_URL:-}
+      CANVAS_ICS_URL: ${CANVAS_ICS_URL:-}
+      CANVAS_COURSE_LABELS: ${CANVAS_COURSE_LABELS:-}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
+      GOOGLE_OAUTH_AUTH_URL: ${GOOGLE_OAUTH_AUTH_URL:-https://accounts.google.com/o/oauth2/v2/auth}
+      GOOGLE_OAUTH_TOKEN_URL: ${GOOGLE_OAUTH_TOKEN_URL:-https://oauth2.googleapis.com/token}
+      GOOGLE_OAUTH_REVOKE_URL: ${GOOGLE_OAUTH_REVOKE_URL:-https://oauth2.googleapis.com/revoke}
+      GOOGLE_HEALTH_BASE_URL: ${GOOGLE_HEALTH_BASE_URL:-https://health.googleapis.com}
+    depends_on:
+      atlas-db:
+        condition: service_healthy
+    networks:
+      - default
+      - securo
+      - nas
+    ports:
+      # 127.0.0.1 only — reachable through atlas-web's /api proxy, and by hand
+      # for `curl -X POST 127.0.0.1:8187/api/sync/<source>` while developing.
+      - "127.0.0.1:${API_PORT:-8187}:8000"
+    restart: unless-stopped
+
+  atlas-web:
+    build:
+      context: ./frontend
+    image: atlas-web:local
+    container_name: atlas-web
+    depends_on:
+      - atlas-api
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8188}:8080"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  atlas-cron:
+    build:
+      context: ./cron
+    image: atlas-cron:local
+    container_name: atlas-cron
+    environment:
+      ATLAS_API: http://atlas-api:8000
+      TZ: ${TZ:-America/New_York}
+    depends_on:
+      - atlas-api
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+
+networks:
+  securo:
+    external: true
+    name: securo_default
+  nas:
+    external: true
+    name: nas_default

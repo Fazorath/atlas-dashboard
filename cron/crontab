@@ -1,0 +1,31 @@
+# Atlas sync schedule. Each line hits POST $ATLAS_API/api/sync/<source>; the API
+# records every attempt in sync_runs, so this file stays dumb on purpose.
+#
+# m  h  dom mon dow  command
+
+# Heartbeat — proves cron can reach the API and write. Safe to drop once real
+# sources are scheduled below.
+5    *  *   *   *    /usr/local/bin/sync.sh noop
+
+# Phase 2 — weather, hourly. At :07, not :00 — the top of the hour is when
+# every cron job on the internet hits Open-Meteo's free tier at once, and a
+# :00 run met "503 The service is overloaded" on 2026-09-22.
+7    *  *   *   *    /usr/local/bin/sync.sh weather
+
+# Phase 3 — Securo reachability. A live proxy writes nothing; this only keeps
+# a dated row in sync_runs so the Sources strip can say "live" or "unreachable".
+*/15 *  *   *   *    /usr/local/bin/sync.sh finance
+
+# Phase 4 — Audiobookshelf reachability. Live proxy, writes nothing; same job
+# as the finance line, on the same quarter-hour.
+*/15 *  *   *   *    /usr/local/bin/sync.sh listening
+
+# Phase 6 — Canvas assignments, hourly. The source is named `school`, the key
+# the dashboard reads, not `canvas`.
+15   *  *   *   *    /usr/local/bin/sync.sh school
+
+# Phase 7 — Fitbit via Google Health API, hourly rather than the nightly the
+# plan sketched: last night only exists once the watch has synced after you
+# wake, and a 4am run would leave the card a night behind all day. ~6 calls a
+# run, against a 300/minute per-user quota. Named `sleep`, the dashboard's key.
+40   *  *   *   *    /usr/local/bin/sync.sh sleep
