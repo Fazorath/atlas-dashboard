@@ -18,7 +18,7 @@ The sharp edge is the token, not the data:
 * Google does not rotate refresh tokens on use. If a refresh response ever does
   carry a new one, it is stored anyway.
 * An expired or revoked refresh token is `invalid_grant`. That marks the token
-  row invalid and fails the sync with a message the Sleep screen turns into a
+  row invalid and fails the sync with a message the Status screen turns into a
   Reconnect button. The row is kept, not deleted, so the screen can say why.
 
 What gets archived, and from where:
@@ -82,7 +82,7 @@ CLOCK_SKEW = timedelta(minutes=2)
 #: How long a Connect click stays valid before its `state` is forgotten.
 STATE_TTL_S = 15 * 60
 
-RECONNECT = "Reconnect on the Sleep page."
+RECONNECT = "Reconnect on the Status screen."
 
 
 class NotConnected(RuntimeError):
@@ -104,7 +104,7 @@ _refresh_lock = asyncio.Lock()
 def paste_back() -> bool:
     """True when the registered redirect is a loopback address. Google sends
     the browser there, nothing answers, and the code is read out of the address
-    bar instead — the Sleep screen asks for it to be pasted."""
+    bar instead — the Status screen asks for it to be pasted."""
     host = (urlsplit(settings.google_oauth_redirect_uri).hostname or "").lower()
     return host in ("localhost", "127.0.0.1", "::1")
 
@@ -266,7 +266,7 @@ async def access_token(session: AsyncSession) -> str:
     async with _refresh_lock:
         token = await session.get(OAuthToken, PROVIDER, populate_existing=True)
         if token is None:
-            raise NotConnected("Fitbit is not connected yet. Connect on the Sleep page.")
+            raise NotConnected("Fitbit is not connected yet. Connect on the Status screen.")
         if token.invalid_at is not None:
             raise Disconnected(f"{token.invalid_reason or 'Google refused the token'}. {RECONNECT}")
 

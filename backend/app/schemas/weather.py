@@ -5,7 +5,7 @@ them, because "which unit do I want to look at" is a display preference and not
 something worth a round trip or a second column.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -38,6 +38,24 @@ class WeatherNow(BaseModel):
     weather_code: int | None = None
     description: str
     is_day: bool | None = None
+    uv_index: float | None = None
+    #: US AQI for this hour, from Open-Meteo's air-quality model.
+    us_aqi: int | None = None
+
+
+class DailyPoint(BaseModel):
+    """One local day of the 7-day strip."""
+
+    date: date
+    temperature_max_c: float | None = None
+    temperature_min_c: float | None = None
+    precipitation_probability_max: int | None = None
+    precipitation_sum_mm: float | None = None
+    weather_code: int | None = None
+    description: str
+    sunrise: datetime | None = None
+    sunset: datetime | None = None
+    uv_index_max: float | None = None
 
 
 class WeatherSummary(BaseModel):
@@ -54,5 +72,8 @@ class WeatherSummary(BaseModel):
     high_c: float | None = None
     low_c: float | None = None
     hourly: list[HourlyPoint] = []
+    #: Today and the six days after it, from `weather_daily`. The first entry is
+    #: today when the archive has it — check its date rather than assuming.
+    daily: list[DailyPoint] = []
     fetched_at: datetime | None = None
     detail: str | None = None

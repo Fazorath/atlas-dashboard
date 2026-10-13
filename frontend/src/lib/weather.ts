@@ -76,3 +76,30 @@ export function weatherIcon(code: number | null | undefined, isDay: boolean | nu
   if (code <= 86) return CloudSnow;
   return CloudLightning;
 }
+
+/** "7:28 AM" — sunrise and sunset, in local time. */
+export function formatClock(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** WHO's UV index bands. */
+export function uvLevel(uv: number | null | undefined): string | null {
+  if (uv == null) return null;
+  if (uv < 3) return "Low";
+  if (uv < 6) return "Moderate";
+  if (uv < 8) return "High";
+  if (uv < 11) return "Very high";
+  return "Extreme";
+}
+
+/** The EPA's US AQI bands, in the words its own scale uses. */
+export function aqiLevel(aqi: number | null | undefined): string | null {
+  if (aqi == null) return null;
+  if (aqi <= 50) return "Good";
+  if (aqi <= 100) return "Moderate";
+  if (aqi <= 150) return "Unhealthy for sensitive groups";
+  if (aqi <= 200) return "Unhealthy";
+  if (aqi <= 300) return "Very unhealthy";
+  return "Hazardous";
+}

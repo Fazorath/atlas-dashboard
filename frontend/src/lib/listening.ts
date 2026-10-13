@@ -12,7 +12,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { getListening, type ListeningBook, type ListeningSummary } from "@/lib/api";
+import {
+  getListening,
+  getListeningStats,
+  type ListeningBook,
+  type ListeningSummary,
+} from "@/lib/api";
 
 export const LISTENING_KEY = ["listening"] as const;
 
@@ -35,6 +40,16 @@ export function useListening(): ListeningQuery {
   });
 
   return { isPending: query.isPending, isError: query.isError, data: query.data };
+}
+
+/** The Listening screen's history — minutes per day and finished books. Only
+ *  that screen asks, so Today doesn't spend a second round trip to ABS. */
+export function useListeningStats(days = 7) {
+  return useQuery({
+    queryKey: ["listening", "stats", days],
+    queryFn: () => getListeningStats(days),
+    refetchInterval: REFETCH_MS,
+  });
 }
 
 /** "4h 49m" / "58m" / "40s".

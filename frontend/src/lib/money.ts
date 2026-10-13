@@ -13,10 +13,13 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  getAccounts,
+  getBills,
+  getDailyOut,
   getFinance,
-  getFinanceCategories,
   getFinanceTrend,
-  type CategorySpend,
+  getGoals,
+  getSpending,
   type FinanceSummary,
   type MonthPoint,
 } from "@/lib/api";
@@ -52,8 +55,8 @@ export function useFinance(): FinanceQuery {
  *  to be told again that Securo is not configured. */
 export function useSpending(enabled: boolean) {
   const query = useQuery({
-    queryKey: ["finance", "categories"],
-    queryFn: getFinanceCategories,
+    queryKey: ["finance", "spending"],
+    queryFn: getSpending,
     refetchInterval: REFETCH_MS,
     enabled,
   });
@@ -61,8 +64,50 @@ export function useSpending(enabled: boolean) {
   return {
     isPending: query.isPending,
     isError: query.isError,
-    rows: (query.data ?? []) as CategorySpend[],
+    rows: query.data?.categories ?? [],
+    uncategorised: query.data?.uncategorised ?? null,
+    securoUrl: query.data?.securo_url ?? null,
   };
+}
+
+/** How far ahead "Upcoming bills" looks. */
+export const BILLS_DAYS = 30;
+
+export function useAccounts(enabled: boolean) {
+  return useQuery({
+    queryKey: ["finance", "accounts"],
+    queryFn: getAccounts,
+    refetchInterval: REFETCH_MS,
+    enabled,
+  });
+}
+
+export function useBills(enabled: boolean, days = BILLS_DAYS) {
+  return useQuery({
+    queryKey: ["finance", "bills", days],
+    queryFn: () => getBills(days),
+    refetchInterval: REFETCH_MS,
+    enabled,
+  });
+}
+
+export function useGoals(enabled: boolean) {
+  return useQuery({
+    queryKey: ["finance", "goals"],
+    queryFn: getGoals,
+    refetchInterval: REFETCH_MS,
+    enabled,
+  });
+}
+
+/** This month's Out per day, the 1st through today. */
+export function useDailyOut(enabled: boolean) {
+  return useQuery({
+    queryKey: ["finance", "daily"],
+    queryFn: getDailyOut,
+    refetchInterval: REFETCH_MS,
+    enabled,
+  });
 }
 
 export function useMonthlyTrend(enabled: boolean, months = TREND_MONTHS) {

@@ -29,6 +29,56 @@ class CategorySpend(BaseModel):
     amount: float
     #: 0–1, already divided down from Securo's percentage.
     share: float
+    #: Securo's no-category bucket, renamed from "Sem categoria".
+    uncategorised: bool = False
+
+
+class Uncategorised(BaseModel):
+    """Out with no category yet — the nudge beside the breakdown."""
+
+    amount: float
+    count: int
+
+
+class Spending(BaseModel):
+    """"Where it went": categorised spend only, with shares of *categorised*
+    Out, and the uncategorised remainder said separately."""
+
+    categories: list[CategorySpend] = []
+    uncategorised: Uncategorised | None = None
+    #: Where the nudge's "open Securo" goes; null when SECURO_PUBLIC_URL is unset.
+    securo_url: str | None = None
+
+
+class Account(BaseModel):
+    id: str
+    name: str
+    institution: str | None = None
+    kind: str
+    balance: float
+    currency: str
+
+
+class Bill(BaseModel):
+    date: date
+    description: str
+    amount: float
+    currency: str
+    category: str | None = None
+    color: str | None = None
+
+
+class Goal(BaseModel):
+    name: str
+    target: float
+    current: float
+    currency: str
+    #: 0–1.
+    share: float
+    target_date: date | None = None
+    on_track: str | None = None
+    monthly_contribution: float | None = None
+    color: str | None = None
 
 
 class MonthPoint(BaseModel):
@@ -38,6 +88,13 @@ class MonthPoint(BaseModel):
     income: float
     expenses: float
     net: float
+
+
+class DayOut(BaseModel):
+    """One calendar day's Out, transfers left out — the bars under This month."""
+
+    date: date
+    amount: float
 
 
 class FinanceSummary(BaseModel):

@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Optional. Blank means Securo picks the account's oldest workspace, which
     # is what its own frontend falls back to; set it to pin a specific one.
     securo_workspace_id: str = ""
+    # Where the *browser* reaches Securo, for Money's "open Securo" nudge. Not
+    # SECURO_BASE_URL, which is a docker network name. Blank renders no link.
+    securo_public_url: str = ""
 
     # Phase 4 — Audiobookshelf, reached over nas_default.
     abs_base_url: str = "http://audiobookshelf:80"
@@ -57,7 +60,7 @@ class Settings(BaseSettings):
     google_oauth_client_secret: str = ""
     # Must match a URI registered on the client exactly, port included. The
     # tailnet URL lets Google redirect straight back; a `http://localhost:...`
-    # one works too, and the Sleep screen then asks you to paste the address
+    # one works too, and the Status screen then asks you to paste the address
     # the browser landed on.
     google_oauth_redirect_uri: str = ""
     # Overridable so the populated path can be exercised against a stub.

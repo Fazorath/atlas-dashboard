@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.measured import apply_measured
 from app.sources.audiobookshelf import check_audiobookshelf
 from app.sources.canvas import sync_canvas
 from app.sources.google_health import sync_google_health
@@ -31,6 +32,9 @@ class Source:
     #: would be a lie — the dashboard says "live" for these instead, and falls
     #: back to the failure of the last probe to say when it is not.
     live: bool = False
+    #: Plumbing rather than a Source anyone reads — left out of the Status
+    #: screen. Cron still calls it and `sync_runs` still records it.
+    hidden: bool = False
 
 
 SOURCES: dict[str, Source] = {}
@@ -42,6 +46,7 @@ def register(
     is_configured: Callable[[], bool] = lambda: True,
     description: str = "",
     live: bool = False,
+    hidden: bool = False,
 ) -> None:
     SOURCES[name] = Source(
         name=name,
@@ -49,6 +54,7 @@ def register(
         is_configured=is_configured,
         description=description,
         live=live,
+        hidden=hidden,
     )
 
 
@@ -58,7 +64,12 @@ async def _noop(session: AsyncSession) -> int:
     return 0
 
 
-register("noop", _noop, description="Heartbeat — proves cron reaches the API and can write.")
+register(
+    "noop",
+    _noop,
+    description="Heartbeat — proves cron reaches the API and can write.",
+    hidden=True,
+)
 
 # Sources import nothing from here: registration is this module's job, so a
 # provider module stays a plain function of a session and is testable alone.
@@ -106,9 +117,17 @@ register(
 # configured once the OAuth client is in .env — whether an account is actually
 # connected is a row in oauth_tokens, and a missing or expired one fails the
 # sync, which is what raises the Reconnect prompt.
+async def _sync_health(session: AsyncSession) -> int:
+    """Archive Health, then tick the Measured habits that read it (ADR 0001).
+    Habits has no sync of its own; this is the moment its figures change."""
+    rows = await sync_google_health(session)
+    await apply_measured(session)
+    return rows
+
+
 register(
     "sleep",
-    sync_google_health,
+    _sync_health,
     is_configured=lambda: settings.google_health_configured,
     description="Fitbit via Google Health, archived to sleep_sessions and daily_activity.",
 )

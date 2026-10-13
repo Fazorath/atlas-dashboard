@@ -26,6 +26,22 @@ class AssignmentOut(BaseModel):
     overdue: bool
 
 
+class ClassOut(BaseModel):
+    """A Class session: a time you join, never a to-do."""
+
+    ics_uid: str
+    title: str
+    #: Short label, like an assignment's.
+    course: str | None
+    course_full: str | None
+    start_at: datetime
+    end_at: datetime | None
+    location: str | None
+    join_url: str | None
+    #: Started and not yet over.
+    in_progress: bool
+
+
 class SchoolSummary(BaseModel):
     configured: bool
     detail: str | None = None
@@ -36,5 +52,9 @@ class SchoolSummary(BaseModel):
     #: The seven local days starting today, done or not — the Today ring.
     week_total: int = 0
     week_done: int = 0
+    #: The class happening now, or the next one to start. Never counted above.
+    next_class: ClassOut | None = None
+    #: Class sessions from now to the end of the window, soonest first.
+    classes: list[ClassOut] = []
     #: When the feed last listed anything. Freshness, not a sync-run time.
     fetched_at: datetime | None = None

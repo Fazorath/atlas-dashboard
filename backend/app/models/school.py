@@ -58,3 +58,32 @@ class AssignmentStatus(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ClassSession(Base):
+    """A Class session: a scheduled live class you join (Canvas's
+    `event-calendar-event-*` entries). A time, not a to-do — there is no status
+    table beside it, because nothing about a class is ever ticked or counted.
+
+    Archived on the same rules as `assignments`: upserted on the UID, never
+    deleted, and an upcoming one that vanishes from the feed gets `removed_at`.
+    """
+
+    __tablename__ = "class_sessions"
+
+    ics_uid: Mapped[str] = mapped_column(String(255), primary_key=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    course: Mapped[str | None] = mapped_column(Text, nullable=True)
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    location: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The meeting link pulled out of the event's description (Zoom, Teams…).
+    join_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Canvas's own calendar link for the course.
+    url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    first_seen: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

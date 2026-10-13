@@ -23,6 +23,19 @@ export const SOURCE = {
 
 export type SourceName = (typeof SOURCE)[keyof typeof SOURCE];
 
+/** What each Source is called on screen — the upstream, not the registry key. */
+export const SOURCE_LABEL: Record<string, string> = {
+  weather: "Open-Meteo",
+  finance: "Securo",
+  listening: "Audiobookshelf",
+  school: "Canvas",
+  sleep: "Google Health",
+};
+
+export function sourceLabel(name: string): string {
+  return SOURCE_LABEL[name] ?? name;
+}
+
 export interface Sources {
   isPending: boolean;
   isError: boolean;
@@ -78,6 +91,48 @@ export function freshnessLabel(status: SourceStatus): string {
   if (!run) return "never synced";
   if (run.status === "running") return "syncing";
   return timeAgo(run.finished_at ?? run.started_at) ?? "synced";
+}
+
+/** An Area header's Freshness: "checked 29m ago", or "live" for a Source read
+    on every request. A failure or a missing setup says so instead. */
+export function areaFreshness(status: SourceStatus): string {
+  if (!status.configured) return "needs setup";
+  const run = status.last_run;
+  if (run?.status === "failed") return status.live ? "unreachable" : "sync failed";
+  if (status.live) return "live";
+  if (!run) return "not checked yet";
+  if (run.status === "running") return "checking now";
+  const ago = timeAgo(run.finished_at ?? run.started_at);
+  return ago ? `checked ${ago}` : "checked";
+}
+
+export interface Problem {
+  source: string;
+  /** "Canvas sync failed" — short enough for Today's chip. */
+  title: string;
+  /** What went wrong, as the Source reported it. */
+  detail: string | null;
+}
+
+/** Sources that need you to act: signed out, unreachable, misconfigured. The
+    only plumbing fact Today ever shows. */
+export function problemsOf(all: SourceStatus[]): Problem[] {
+  return all.flatMap((status): Problem[] => {
+    const label = sourceLabel(status.source);
+    if (!status.configured) {
+      return [{ source: status.source, title: `${label} needs setup`, detail: null }];
+    }
+    if (status.last_run?.status === "failed") {
+      return [
+        {
+          source: status.source,
+          title: status.live ? `${label} unreachable` : `${label} sync failed`,
+          detail: status.last_run.error,
+        },
+      ];
+    }
+    return [];
+  });
 }
 
 export function freshnessTone(status: SourceStatus): "live" | "setup" | "error" | "idle" {

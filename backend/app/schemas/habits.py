@@ -27,12 +27,17 @@ class HabitIn(BaseModel):
 
 class HabitPatch(BaseModel):
     """Every field optional; only what is sent changes. `archived: true`
-    stamps archived_at, `false` restores the habit to today's list."""
+    stamps archived_at, `false` restores the habit to today's list.
+
+    `metric` + `target` link the habit to a Health figure (a Measured habit);
+    `metric: null` unlinks it and keeps every tick it already has."""
 
     name: str | None = Field(default=None, max_length=80)
     icon: str | None = Field(default=None, max_length=16)
     sort_order: int | None = None
     archived: bool | None = None
+    metric: str | None = Field(default=None, max_length=32)
+    target: float | None = Field(default=None, gt=0)
 
     _name = field_validator("name")(_clean_name)
 
@@ -48,6 +53,8 @@ class HabitOut(BaseModel):
     sort_order: int
     created_at: datetime
     archived_at: datetime | None
+    metric: str | None = None
+    target: float | None = None
 
 
 class HabitDay(BaseModel):
@@ -68,6 +75,22 @@ class HabitDay(BaseModel):
     #: Share of the last 30 days ticked, counting only days since the habit
     #: began (its creation, or its earliest backfilled tick if that is older).
     completion_30d: float
+    #: Measured habits only: the linked figure, its target, and that figure on
+    #: `date` (null when the Source has nothing for the day yet).
+    metric: str | None = None
+    target: float | None = None
+    value: float | None = None
+    #: True when `done` came from the data rather than from your hand.
+    auto: bool = False
+
+
+class MetricOut(BaseModel):
+    """A Health figure a habit can be linked to."""
+
+    key: str
+    label: str
+    unit: str
+    default_target: float
 
 
 class HistoryDay(BaseModel):

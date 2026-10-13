@@ -3,7 +3,7 @@
    Google's Testing-status apps sign you out seven days after consent however
    often the token is used, so reconnecting is a weekly chore by design, not a
    failure. The banner makes it one click on Today, before the card goes stale;
-   the Sleep screen's card is the full control — connect, paste back, reconnect,
+   the Status screen's card is the full control — connect, paste back, reconnect,
    disconnect. */
 
 import { Link2, Moon, RefreshCw } from "lucide-react";
@@ -73,9 +73,9 @@ function BannerBody({ conn, due }: { conn: Connection; due: "expired" | "soon" }
             {error ?? line}
           </p>
         </div>
-        {/* Paste-back needs the Sleep screen's input, so that flow goes there. */}
+        {/* Paste-back needs the Status screen's input, so that flow goes there. */}
         {conn.paste_back ? (
-          <a href="/sleep" className="pressable self-start lap:self-auto">
+          <a href="/status" className="pressable self-start lap:self-auto">
             <span className="inline-flex h-11 items-center gap-2 rounded-full bg-accent px-4 text-[14px] font-bold text-bg">
               <RefreshCw size={16} strokeWidth={2.6} /> Reconnect
             </span>
@@ -90,7 +90,7 @@ function BannerBody({ conn, due }: { conn: Connection; due: "expired" | "soon" }
   );
 }
 
-/** The Sleep screen's connection card. */
+/** The Status screen's connection card. */
 export function ConnectionCard({
   conn,
   flash,
@@ -138,7 +138,7 @@ export function ConnectionCard({
       : ["Sign in with the Google account your Fitbit uses. Atlas asks for read-only sleep, activity and heart-rate access."];
 
   return (
-    <Card title="Google Health" accent="sleep" tinted={false} icon={Link2} aside={chip} bodyClassName="gap-4 pt-3">
+    <Card title="Google Health" accent="sleep" icon={Link2} aside={chip} bodyClassName="gap-4 pt-3">
       {flash ? (
         <Chip tone={flash.ok ? "live" : "error"} className="self-start whitespace-normal">
           {flash.message}

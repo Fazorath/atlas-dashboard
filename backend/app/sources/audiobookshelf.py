@@ -58,9 +58,11 @@ TIMEOUT = httpx.Timeout(20.0)
 #: through two proxies.
 COVER_WIDTH = 400
 
-#: How many in-progress books the API will hand out at most. The card shows one;
-#: this bounds the response for anything that later wants the shelf behind it.
-MAX_IN_PROGRESS = 12
+#: How many in-progress books the API will hand out at most. The card shows one
+#: and the Listening screen shows them all; this only bounds a runaway shelf.
+MAX_IN_PROGRESS = 50
+#: Finished books the Listening screen lists, newest first.
+MAX_FINISHED = 12
 
 
 @dataclass(frozen=True)
@@ -147,6 +149,35 @@ def _text(value: Any) -> str | None:
         return None
     out = str(value).strip()
     return out or None
+
+
+@dataclass(frozen=True)
+class FinishedBook:
+    item_id: str
+    title: str
+    author: str | None
+    finished_at: datetime
+
+
+@dataclass(frozen=True)
+class ListeningStats:
+    """ABS's own history: seconds listened per day (in ABS's timezone, as it
+    buckets them) and the books you finished. Atlas keeps no copy — ABS owns
+    this history, and it is read live like everything else here."""
+
+    days: dict[str, float]
+    finished: list[FinishedBook]
+    fetched_at: datetime
+
+
+def _author(metadata: dict[str, Any]) -> str | None:
+    if name := _text(metadata.get("authorName")):
+        return name
+    authors = metadata.get("authors")
+    if isinstance(authors, list):
+        names = [_text(a.get("name")) for a in authors if isinstance(a, dict)]
+        return ", ".join(n for n in names if n) or None
+    return None
 
 
 def _reason(response: httpx.Response) -> str:
@@ -277,6 +308,67 @@ async def fetch_listening() -> Listening:
             _get(client, "/api/me/listening-stats"),
         )
     return parse_listening(items, me, stats, datetime.now(UTC))
+
+
+async def fetch_stats() -> ListeningStats:
+    """Daily listening and finished books. Titles come from the stats payload's
+    own `items` where ABS included them, else one item read each."""
+    async with _client() as client:
+        stats, me = await asyncio.gather(
+            _get(client, "/api/me/listening-stats"),
+            _get(client, "/api/me"),
+        )
+        stats = stats if isinstance(stats, dict) else {}
+        days = {
+            str(k): float(v)
+            for k, v in (stats.get("days") or {}).items()
+            if isinstance(v, (int, float))
+        }
+
+        progress = me.get("mediaProgress") if isinstance(me, dict) else None
+        done = sorted(
+            (
+                p for p in (progress or [])
+                if isinstance(p, dict) and p.get("isFinished") and p.get("libraryItemId")
+            ),
+            key=lambda p: p.get("finishedAt") or p.get("lastUpdate") or 0,
+            reverse=True,
+        )[:MAX_FINISHED]
+
+        known: dict[str, dict[str, Any]] = {}
+        for item_id, item in (stats.get("items") or {}).items():
+            if isinstance(item, dict) and isinstance(item.get("mediaMetadata"), dict):
+                known[str(item_id)] = item["mediaMetadata"]
+
+        missing = [str(p["libraryItemId"]) for p in done if str(p["libraryItemId"]) not in known]
+
+        async def _metadata(item_id: str) -> tuple[str, dict[str, Any]]:
+            try:
+                item = await _get(client, f"/api/items/{item_id}")
+            except RuntimeError:
+                return item_id, {}
+            return item_id, ((item or {}).get("media") or {}).get("metadata") or {}
+
+        for item_id, metadata in await asyncio.gather(*(_metadata(i) for i in missing)):
+            known[item_id] = metadata
+
+    finished = []
+    for p in done:
+        item_id = str(p["libraryItemId"])
+        when = _moment(p.get("finishedAt") or p.get("lastUpdate"))
+        if when is None:
+            continue
+        metadata = known.get(item_id) or {}
+        finished.append(
+            FinishedBook(
+                item_id=item_id,
+                title=_text(metadata.get("title")) or "Untitled",
+                author=_author(metadata),
+                finished_at=when,
+            )
+        )
+
+    return ListeningStats(days=days, finished=finished, fetched_at=datetime.now(UTC))
 
 
 async def fetch_cover(item_id: str, width: int = COVER_WIDTH) -> tuple[bytes, str]:

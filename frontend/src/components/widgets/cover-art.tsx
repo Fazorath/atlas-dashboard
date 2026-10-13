@@ -16,6 +16,7 @@ import { IconTile } from "@/components/ui/icon-tile";
 import { cn } from "@/lib/utils";
 
 const boxes = {
+  44: "size-11 rounded-[14px]",
   64: "size-16 rounded-[16px]",
   96: "size-24 rounded-[22px]",
 } as const;
@@ -31,7 +32,7 @@ export function CoverArt({
   /** The book's title. Empty when the cover sits next to that title anyway —
    *  a screen reader should not read the same book twice. */
   alt: string;
-  size?: 64 | 96;
+  size?: 44 | 64 | 96;
   fallbackIcon: LucideIcon;
   className?: string;
 }) {

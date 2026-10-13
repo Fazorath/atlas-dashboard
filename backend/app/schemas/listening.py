@@ -12,7 +12,7 @@ behind it, so there is no last-good position to fall back on and the card has to
 say it could not reach Audiobookshelf rather than quietly showing nothing.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -64,4 +64,29 @@ class ListeningSummary(BaseModel):
 
     #: When Atlas asked ABS. Always "just now" in practice: this is a live
     #: proxy, so the position on screen is never older than the request.
+    fetched_at: datetime | None = None
+
+
+class ListeningDay(BaseModel):
+    date: date
+    seconds: float
+
+
+class FinishedBook(BaseModel):
+    item_id: str
+    title: str
+    author: str | None = None
+    finished_at: datetime
+    cover_url: str | None = None
+    link: str | None = None
+
+
+class ListeningStats(BaseModel):
+    """The Listening screen's history, read live from ABS: one row per local
+    day for the window (zero where ABS has nothing) and the books finished."""
+
+    configured: bool
+    detail: str | None = None
+    days: list[ListeningDay] = []
+    finished: list[FinishedBook] = []
     fetched_at: datetime | None = None

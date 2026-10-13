@@ -1,5 +1,4 @@
-/* The three sleep marks: a night's stage split, its hypnogram, and a row of
-   nights.
+/* The two sleep marks: a night's stage split and its hypnogram.
 
    Stages are ordinal (awake at the surface, deep at the floor), so they share
    one violet ramp rather than four hues, and the hypnogram repeats the order
@@ -184,96 +183,6 @@ export function Hypnogram({ night }: { night: Night }) {
             <span className="absolute right-0">{clockTime(night.end_at)}</span>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-export interface NightBar {
-  key: string;
-  label: string;
-  isToday: boolean;
-  minutes: number | null;
-  /** Named in the readout, e.g. "Tuesday". */
-  long: string;
-}
-
-/** A row of nights. The bars are asleep time on one shared scale; an empty
-    slot keeps its place as a short track so the week never closes up. */
-export function NightBars({
-  days,
-  goal,
-  height = 120,
-}: {
-  days: NightBar[];
-  /** Minutes the dotted goal line sits at. */
-  goal: number;
-  height?: number;
-}) {
-  const [active, setActive] = useState<string | null>(null);
-  const top = Math.max(goal * 1.15, ...days.map((d) => d.minutes ?? 0));
-  const hovered = days.find((d) => d.key === active);
-  const readout = hovered
-    ? `${hovered.long} · ${formatMinutes(hovered.minutes) ?? "no night recorded"}`
-    : null;
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <p className="tnum h-4 text-[12px] font-semibold text-accent-soft" aria-live="polite">
-        {readout}
-      </p>
-      {/* Bars only in here, so the goal line's percentage is of the bars'
-          own height and not of the labels under them. */}
-      {/* A fixed height, not a minimum: the bars are percentages of it, and a
-          percentage of an auto-height flex row resolves to nothing. */}
-      <div className="relative flex shrink-0 items-end gap-2" style={{ height }}>
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 border-t-2 border-dotted border-accent-track"
-          style={{ bottom: `${(goal / top) * 100}%` }}
-        />
-        {days.map((day) => {
-          const pct = day.minutes ? Math.max(0.06, day.minutes / top) : 0;
-          const lit = active === null || active === day.key;
-          return (
-            <button
-              key={day.key}
-              type="button"
-              className="relative flex h-full min-w-0 flex-1 flex-col justify-end"
-              onMouseEnter={() => setActive(day.key)}
-              onMouseLeave={() => setActive(null)}
-              onFocus={() => setActive(day.key)}
-              onBlur={() => setActive(null)}
-              aria-label={`${day.long}: ${formatMinutes(day.minutes) ?? "no night recorded"}`}
-            >
-              {day.minutes ? (
-                <div
-                  className={cn(
-                    "value-transition w-full rounded-[12px] transition-opacity",
-                    day.isToday ? "bg-accent" : "bg-accent/70",
-                    !lit && "opacity-50",
-                  )}
-                  style={{ height: `${pct * 100}%` }}
-                />
-              ) : (
-                <div className="h-3 w-full rounded-[12px] bg-accent-track" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-      <div aria-hidden className="flex gap-2">
-        {days.map((day) => (
-          <span
-            key={day.key}
-            className={cn(
-              "min-w-0 flex-1 text-center text-[12px] leading-4",
-              day.isToday ? "font-extrabold text-accent" : "font-bold text-fg-muted",
-            )}
-          >
-            {day.label}
-          </span>
-        ))}
       </div>
     </div>
   );

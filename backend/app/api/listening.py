@@ -16,12 +16,20 @@ this dashboard can move where you are in a book.
 import logging
 import re
 from collections.abc import Awaitable
+from datetime import timedelta
 from typing import TypeVar
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 
+from app.clock import local_today
 from app.config import settings
-from app.schemas.listening import Book, ListeningSummary
+from app.schemas.listening import (
+    Book,
+    FinishedBook,
+    ListeningDay,
+    ListeningStats,
+    ListeningSummary,
+)
 from app.sources import audiobookshelf as abs_source
 
 log = logging.getLogger(__name__)
@@ -30,7 +38,7 @@ router = APIRouter(prefix="/listening", tags=["listening"])
 
 NOT_CONFIGURED = (
     "Mint an API key in Audiobookshelf under Settings, API Keys, put it in "
-    "/srv/atlas/.env as ABS_TOKEN, then restart atlas-api."
+    ".env as ABS_TOKEN, then restart atlas-api."
 )
 
 #: ABS ids are UUIDs. The id goes into an upstream URL path, so anything that is
@@ -104,6 +112,36 @@ async def listening_root() -> ListeningSummary:
         today_s=listening.today_s,
         total_s=listening.total_s,
         fetched_at=listening.fetched_at,
+    )
+
+
+@router.get("/stats", response_model=ListeningStats)
+async def listening_stats(days: int = Query(default=14, ge=1, le=90)) -> ListeningStats:
+    """Minutes per day for the last `days` and the books you finished."""
+    if not settings.abs_configured:
+        return ListeningStats(configured=False, detail=NOT_CONFIGURED)
+
+    stats = await _upstream(abs_source.fetch_stats())
+    today = local_today()
+    window = [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
+
+    return ListeningStats(
+        configured=True,
+        days=[
+            ListeningDay(date=d, seconds=stats.days.get(d.isoformat(), 0.0)) for d in window
+        ],
+        finished=[
+            FinishedBook(
+                item_id=b.item_id,
+                title=b.title,
+                author=b.author,
+                finished_at=b.finished_at,
+                cover_url=f"/api/listening/cover/{b.item_id}",
+                link=_link(b.item_id),
+            )
+            for b in stats.finished
+        ],
+        fetched_at=stats.fetched_at,
     )
 
 

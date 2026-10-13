@@ -7,6 +7,9 @@ screens read these endpoints directly.
 Streaks and completion are computed in SQL on every read (gaps-and-islands over
 habit_entries), never stored. At one person's scale that is a few thousand rows
 at most, and it means a backfilled tick can't leave a stale counter behind.
+
+Measured habits (ADR 0001, `app/measured.py`) add one wrinkle: a row with
+`done = false` is a manual untick, so every count below filters on `e.done`.
 """
 
 from datetime import date, datetime, timedelta
@@ -18,8 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import local_today, local_zone
 from app.db import get_session
+from app.measured import LINK_BACKFILL_DAYS, METRICS, apply_measured, values_by_day
 from app.models import Habit, HabitEntry
-from app.schemas.habits import HabitDay, HabitIn, HabitOut, HabitPatch, HistoryDay
+from app.schemas.habits import HabitDay, HabitIn, HabitOut, HabitPatch, HistoryDay, MetricOut
 
 router = APIRouter(prefix="/habits", tags=["habits"])
 
@@ -33,10 +37,11 @@ MAX_HISTORY_DAYS = 371
 _DAY_SQL = text(
     """
     WITH h AS (
-      SELECT habits.id, habits.name, habits.icon, habits.sort_order,
+      SELECT habits.id, habits.name, habits.icon, habits.sort_order, habits.metric, habits.target,
              LEAST(
                (habits.created_at AT TIME ZONE :tz)::date,
-               COALESCE((SELECT min(e.date) FROM habit_entries e WHERE e.habit_id = habits.id),
+               COALESCE((SELECT min(e.date) FROM habit_entries e
+                          WHERE e.habit_id = habits.id AND e.done),
                         'infinity'::date)
              ) AS began
       FROM habits
@@ -47,7 +52,7 @@ _DAY_SQL = text(
       SELECT e.habit_id, e.date,
              e.date - (row_number() OVER (PARTITION BY e.habit_id ORDER BY e.date))::int AS grp
       FROM habit_entries e
-      WHERE e.date <= CAST(:today AS date) AND e.habit_id IN (SELECT id FROM h)
+      WHERE e.date <= CAST(:today AS date) AND e.done AND e.habit_id IN (SELECT id FROM h)
     ),
     islands AS (
       SELECT habit_id, max(date) AS last_day, count(*) AS len
@@ -62,13 +67,19 @@ _DAY_SQL = text(
     recent AS (
       SELECT habit_id, count(*) AS n
       FROM habit_entries
-      WHERE date BETWEEN CAST(:today AS date) - 29 AND CAST(:today AS date)
+      WHERE date BETWEEN CAST(:today AS date) - 29 AND CAST(:today AS date) AND done
       GROUP BY habit_id
     )
-    SELECT h.id, h.name, h.icon,
+    SELECT h.id, h.name, h.icon, h.metric, h.target,
            EXISTS (
-             SELECT 1 FROM habit_entries e WHERE e.habit_id = h.id AND e.date = CAST(:day AS date)
+             SELECT 1 FROM habit_entries e
+             WHERE e.habit_id = h.id AND e.date = CAST(:day AS date) AND e.done
            ) AS done,
+           EXISTS (
+             SELECT 1 FROM habit_entries e
+             WHERE e.habit_id = h.id AND e.date = CAST(:day AS date) AND e.done
+               AND e.source = 'measured'
+           ) AS auto,
            COALESCE(s.current, 0) AS current_streak,
            COALESCE(s.longest, 0) AS longest_streak,
            COALESCE(r.n, 0)::float
@@ -89,7 +100,8 @@ _HISTORY_SQL = text(
       SELECT habits.id,
              LEAST(
                (habits.created_at AT TIME ZONE :tz)::date,
-               COALESCE((SELECT min(e.date) FROM habit_entries e WHERE e.habit_id = habits.id),
+               COALESCE((SELECT min(e.date) FROM habit_entries e
+                          WHERE e.habit_id = habits.id AND e.done),
                         'infinity'::date)
              ) AS began,
              (habits.archived_at AT TIME ZONE :tz)::date AS ended
@@ -101,7 +113,7 @@ _HISTORY_SQL = text(
     )
     SELECT d.day AS date,
            (SELECT count(*) FROM habit_entries e JOIN h ON h.id = e.habit_id
-             WHERE e.date = d.day AND (h.ended IS NULL OR h.ended > d.day)) AS done,
+             WHERE e.date = d.day AND e.done AND (h.ended IS NULL OR h.ended > d.day)) AS done,
            (SELECT count(*) FROM h
              WHERE h.began <= d.day AND (h.ended IS NULL OR h.ended > d.day)) AS total
     FROM days d
@@ -117,7 +129,15 @@ async def _day_rows(
         _DAY_SQL,
         {"tz": local_zone().key, "today": local_today(), "day": day, "habit_id": habit_id},
     )
-    return [HabitDay(date=day, **row) for row in result.mappings()]
+    rows = [HabitDay(date=day, **row) for row in result.mappings()]
+    # A Measured habit's row also says what the figure was, so the screen can
+    # read "6h 30m of 8h" rather than leave you guessing why it isn't ticked.
+    for metric in {r.metric for r in rows if r.metric in METRICS}:
+        values = await values_by_day(session, metric, day, day)
+        for r in rows:
+            if r.metric == metric:
+                r.value = values.get(day)
+    return rows
 
 
 def _check_day(day: date | None) -> date:
@@ -159,17 +179,32 @@ async def toggle_habit(
     if habit.archived_at is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Habit is archived; restore it first.")
 
-    removed = await session.execute(
-        delete(HabitEntry)
-        .where(HabitEntry.habit_id == habit_id, HabitEntry.date == day)
-        .returning(HabitEntry.habit_id)
-    )
-    if removed.first() is None:
-        # DO NOTHING rather than fail: a double tap racing itself should land
-        # as one tick, not a 500.
-        await session.execute(
-            insert(HabitEntry).values(habit_id=habit_id, date=day).on_conflict_do_nothing()
+    if habit.metric is not None:
+        # A Measured habit: whatever you set is written down as manual, tick or
+        # untick, so the next sync can't undo it (a manual tick always wins).
+        entry = await session.get(HabitEntry, (habit_id, day))
+        done = not (entry is not None and entry.done)
+        stmt = insert(HabitEntry).values(
+            habit_id=habit_id, date=day, done=done, source="manual", done_at=func.now()
         )
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=["habit_id", "date"],
+                set_={"done": done, "source": "manual", "done_at": func.now()},
+            )
+        )
+    else:
+        removed = await session.execute(
+            delete(HabitEntry)
+            .where(HabitEntry.habit_id == habit_id, HabitEntry.date == day)
+            .returning(HabitEntry.habit_id)
+        )
+        if removed.first() is None:
+            # DO NOTHING rather than fail: a double tap racing itself should
+            # land as one tick, not a 500.
+            await session.execute(
+                insert(HabitEntry).values(habit_id=habit_id, date=day).on_conflict_do_nothing()
+            )
     await session.commit()
     return (await _day_rows(session, day, habit_id=habit_id))[0]
 
@@ -186,6 +221,12 @@ async def habits_history(
         {"tz": local_zone().key, "today": today, "start": today - timedelta(days=days - 1)},
     )
     return [HistoryDay(**row) for row in result.mappings()]
+
+
+@router.get("/metrics", response_model=list[MetricOut])
+async def habit_metrics() -> list[MetricOut]:
+    """The Health figures a habit can be linked to."""
+    return [MetricOut(**vars(m)) for m in METRICS.values()]
 
 
 @router.get("/", response_model=list[HabitOut])
@@ -225,7 +266,33 @@ async def update_habit(
             setattr(habit, field, changes[field])
     if "archived" in changes:
         habit.archived_at = datetime.now(local_zone()) if changes["archived"] else None
+
+    relink = "metric" in changes or "target" in changes
+    if "metric" in changes:
+        metric = changes["metric"]
+        if metric is not None and metric not in METRICS:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"unknown metric {metric!r}; known: {sorted(METRICS)}",
+            )
+        habit.metric = metric
+        if metric is None:
+            habit.target = None
+            # Measured ticks stay ticks; a manual untick means nothing on an
+            # ordinary habit, so it goes back to being an absent row.
+            await session.execute(
+                delete(HabitEntry).where(HabitEntry.habit_id == habit_id, ~HabitEntry.done)
+            )
+        elif "target" not in changes and habit.target is None:
+            habit.target = METRICS[metric].default_target
+    if "target" in changes and habit.metric is not None:
+        if changes["target"] is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "target can't be null")
+        habit.target = changes["target"]
+
     await session.commit()
+    if relink and habit.metric is not None:
+        await apply_measured(session, [habit_id], days=LINK_BACKFILL_DAYS)
     await session.refresh(habit)
     return habit
 

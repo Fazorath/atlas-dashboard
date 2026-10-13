@@ -25,22 +25,3 @@ export function timeAgo(iso: string | null | undefined): string | null {
   }
   return "just now";
 }
-
-/** "Good morning" / "Good afternoon" / "Good evening". */
-export function greeting(now = new Date()): string {
-  const hour = now.getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-/** The uppercase date above a greeting. `long` spells the month out for the
- *  desktop header; the phone abbreviates it to keep one line. */
-export function dateEyebrow(long: boolean, now = new Date()): string {
-  const weekday = now.toLocaleDateString(undefined, { weekday: "long" });
-  const date = now.toLocaleDateString(undefined, {
-    month: long ? "long" : "short",
-    day: "numeric",
-  });
-  return `${weekday} \u00b7 ${date}`;
-}

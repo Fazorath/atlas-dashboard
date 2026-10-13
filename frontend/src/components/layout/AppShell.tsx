@@ -10,10 +10,9 @@
 
 import { NavLink, Outlet } from "react-router-dom";
 
+import { AccountMenu } from "@/components/layout/AccountMenu";
 import { NAV_SECTIONS } from "@/lib/sections";
 import { cn } from "@/lib/utils";
-
-const OWNER_INITIAL = "E";
 
 export function AppShell() {
   return (
@@ -52,13 +51,7 @@ export function AppShell() {
           ))}
         </nav>
 
-        <button
-          type="button"
-          aria-label="Account"
-          className="pressable grid size-11 shrink-0 place-items-center rounded-full bg-surface-2 text-[15px] font-extrabold text-fg"
-        >
-          {OWNER_INITIAL}
-        </button>
+        <AccountMenu />
       </header>
 
       <main className="mx-auto w-full max-w-[1184px] px-[18px] pt-7 pb-[100px] lap:px-12 lap:pb-10">

@@ -1,4 +1,5 @@
-import "@fontsource-variable/plus-jakarta-sans/wght.css";
+import "@fontsource-variable/space-grotesk/wght.css";
+import "@fontsource-variable/jetbrains-mono/wght.css";
 import "./index.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

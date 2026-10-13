@@ -1,6 +1,5 @@
-# Atlas — personal life dashboard. Fourth compose project on arcanum,
-# alongside `nas`, `securo`, and `study-web`.
-#   docker compose -f /srv/atlas/docker-compose.yml ps
+# Atlas — self-hosted personal life dashboard.
+#   docker compose ps
 #
 # Every service and container is `atlas-`-prefixed on purpose: this stack joins
 # securo_default and nas_default as external networks, and securo already owns
@@ -45,6 +44,7 @@ services:
       SECURO_EMAIL: ${SECURO_EMAIL:-}
       SECURO_PASSWORD: ${SECURO_PASSWORD:-}
       SECURO_WORKSPACE_ID: ${SECURO_WORKSPACE_ID:-}
+      SECURO_PUBLIC_URL: ${SECURO_PUBLIC_URL:-}
       ABS_BASE_URL: ${ABS_BASE_URL:-http://audiobookshelf:80}
       ABS_TOKEN: ${ABS_TOKEN:-}
       ABS_PUBLIC_URL: ${ABS_PUBLIC_URL:-}

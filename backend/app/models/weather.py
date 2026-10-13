@@ -11,9 +11,9 @@ key. If Atlas ever tracks a second place, that becomes a composite key and the
 unique constraint below has to grow a location column with it.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, SmallInteger
+from sqlalchemy import Boolean, Date, DateTime, Float, Integer, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -45,8 +45,32 @@ class WeatherObservation(Base):
     # maps it to an icon. Kept as the number so neither is baked into the row.
     weather_code: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     is_day: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    uv_index: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # US AQI, from Open-Meteo's separate air-quality endpoint. Null when that
+    # call failed or the hour is past its shorter forecast horizon.
+    us_aqi: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     # False once the hour has passed and been re-fetched as a real reading.
     is_forecast: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class WeatherDaily(Base):
+    """One local day's forecast or outcome: the 7-day strip, sunrise and
+    sunset, and the day's peak UV. Upserted on the date, so a day forecast a
+    week out converges on what actually happened, like the hourly rows."""
+
+    __tablename__ = "weather_daily"
+
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+    temperature_max_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    temperature_min_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    precipitation_probability_max: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    precipitation_sum_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    weather_code: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    sunrise: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sunset: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    uv_index_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_forecast: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -37,6 +37,7 @@ async def sync_status(session: AsyncSession = Depends(get_session)) -> list[Sour
             last_run=latest.get(name),
         )
         for name, source in sorted(SOURCES.items())
+        if not source.hidden
     ]
 
 

@@ -14,26 +14,40 @@ truth without ever needing a second endpoint.
 
 No API key, by design: Open-Meteo is free for non-commercial use, which is why
 Phase 2 is the cheapest integration in the build order and goes first.
+
+Three requests per sync, all archived:
+
+* hourly forecast, in UTC — the rows above, now with UV index;
+* daily forecast, in the *local* zone — a UTC "day" would end at 8pm here — for
+  the 7-day strip, sunrise and sunset, and the day's peak UV. Upserted on the
+  date into `weather_daily`, so a day forecast a week out converges too;
+* air quality, a separate Open-Meteo host, for US AQI per hour. Optional: if it
+  fails the weather still lands, and the AQI already archived is left alone.
 """
 
 import asyncio
 import logging
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import httpx
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clock import local_today, local_zone
 from app.config import settings
-from app.models import WeatherObservation
+from app.models import WeatherDaily, WeatherObservation
 
 log = logging.getLogger(__name__)
 
 ENDPOINT = "https://api.open-meteo.com/v1/forecast"
+AIR_QUALITY_ENDPOINT = "https://air-quality-api.open-meteo.com/v1/air-quality"
 PAST_DAYS = 2
 FORECAST_DAYS = 3
+#: The daily strip: today and the six days after it.
+DAILY_FORECAST_DAYS = 7
 TIMEOUT = httpx.Timeout(20.0)
 #: Seconds to wait before each retry of a transient failure. Open-Meteo's free
 #: tier answers "503 The service is overloaded" in short bursts; without a
@@ -53,6 +67,18 @@ HOURLY_FIELDS: dict[str, str] = {
     "cloud_cover": "cloud_cover",
     "weather_code": "weather_code",
     "is_day": "is_day",
+    "uv_index": "uv_index",
+}
+
+DAILY_FIELDS: dict[str, str] = {
+    "weather_code": "weather_code",
+    "temperature_2m_max": "temperature_max_c",
+    "temperature_2m_min": "temperature_min_c",
+    "precipitation_probability_max": "precipitation_probability_max",
+    "precipitation_sum": "precipitation_sum_mm",
+    "sunrise": "sunrise",
+    "sunset": "sunset",
+    "uv_index_max": "uv_index_max",
 }
 
 # WMO 4677, the subset Open-Meteo actually emits.
@@ -110,6 +136,24 @@ class HourlyReading:
     cloud_cover: int | None
     weather_code: int | None
     is_day: bool | None
+    uv_index: float | None
+    is_forecast: bool
+    fetched_at: datetime
+
+
+@dataclass(frozen=True)
+class DailyReading:
+    """One local day, in Atlas's units."""
+
+    date: date
+    temperature_max_c: float | None
+    temperature_min_c: float | None
+    precipitation_probability_max: int | None
+    precipitation_sum_mm: float | None
+    weather_code: int | None
+    sunrise: datetime | None
+    sunset: datetime | None
+    uv_index_max: float | None
     is_forecast: bool
     fetched_at: datetime
 
@@ -122,8 +166,18 @@ def _coerce(name: str, value: object) -> object:
         return None
     if name == "is_day":
         return bool(value)
-    if name in ("relative_humidity", "precipitation_probability", "cloud_cover", "weather_code"):
+    if name in (
+        "relative_humidity",
+        "precipitation_probability",
+        "precipitation_probability_max",
+        "cloud_cover",
+        "weather_code",
+    ):
         return int(value)
+    if name in ("sunrise", "sunset"):
+        # The daily request is made in the local zone, so these are naive
+        # local wall-clock strings.
+        return datetime.fromisoformat(str(value)).replace(tzinfo=local_zone())
     return float(value)
 
 
@@ -165,34 +219,63 @@ def parse_hourly(payload: dict, fetched_at: datetime) -> list[HourlyReading]:
     return readings
 
 
-async def fetch_hourly() -> list[HourlyReading]:
-    params = {
-        "latitude": settings.weather_lat,
-        "longitude": settings.weather_lon,
-        "hourly": ",".join(HOURLY_FIELDS),
-        # UTC in, UTC in the table. Local time is a display concern, and the
-        # only place it matters is picking out "today" for the high and low.
-        "timezone": "UTC",
-        "past_days": PAST_DAYS,
-        "forecast_days": FORECAST_DAYS,
+def parse_daily(payload: dict, fetched_at: datetime, today: date) -> list[DailyReading]:
+    """Open-Meteo's columnar daily block, transposed into one row per day."""
+    daily = payload.get("daily") or {}
+    times: Sequence[str] = daily.get("time") or []
+    series: dict[str, Sequence] = {
+        ours: daily.get(theirs) or () for theirs, ours in DAILY_FIELDS.items()
     }
+    readings: list[DailyReading] = []
+    for i, stamp in enumerate(times):
+        day = date.fromisoformat(stamp)
+        values = {
+            ours: _coerce(ours, column[i] if i < len(column) else None)
+            for ours, column in series.items()
+        }
+        readings.append(
+            DailyReading(
+                date=day,
+                is_forecast=day > today,
+                fetched_at=fetched_at,
+                **values,  # type: ignore[arg-type]
+            )
+        )
+    return readings
 
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        for attempt, delay in enumerate((*RETRY_DELAYS, None), start=1):
-            try:
-                response = await client.get(ENDPOINT, params=params)
-            except httpx.TransportError as exc:
-                if delay is None:
-                    raise RuntimeError(f"Open-Meteo unreachable: {type(exc).__name__}") from None
-                log.info("open-meteo attempt %d: %s; retrying in %ds", attempt, exc, delay)
-            else:
-                if response.status_code not in TRANSIENT or delay is None:
-                    break
-                log.info(
-                    "open-meteo attempt %d: HTTP %d; retrying in %ds",
-                    attempt, response.status_code, delay,
-                )
-            await asyncio.sleep(delay)
+
+def parse_air_quality(payload: dict) -> dict[datetime, int]:
+    """US AQI per UTC hour."""
+    hourly = payload.get("hourly") or {}
+    times: Sequence[str] = hourly.get("time") or []
+    values: Sequence = hourly.get("us_aqi") or ()
+    out: dict[datetime, int] = {}
+    for i, stamp in enumerate(times):
+        value = values[i] if i < len(values) else None
+        if value is not None:
+            out[datetime.fromisoformat(stamp).replace(tzinfo=UTC)] = int(round(value))
+    return out
+
+
+async def _get_json(
+    client: httpx.AsyncClient, url: str, params: dict[str, Any], what: str = "Open-Meteo"
+) -> dict:
+    """One GET with the transient-failure retries, raising a readable error."""
+    for attempt, delay in enumerate((*RETRY_DELAYS, None), start=1):
+        try:
+            response = await client.get(url, params=params)
+        except httpx.TransportError as exc:
+            if delay is None:
+                raise RuntimeError(f"{what} unreachable: {type(exc).__name__}") from None
+            log.info("%s attempt %d: %s; retrying in %ds", what, attempt, exc, delay)
+        else:
+            if response.status_code not in TRANSIENT or delay is None:
+                break
+            log.info(
+                "%s attempt %d: HTTP %d; retrying in %ds",
+                what, attempt, response.status_code, delay,
+            )
+        await asyncio.sleep(delay)
 
     # Open-Meteo reports bad coordinates as 400 + {"error":true,"reason":...}.
     # Surface the reason: "latitude must be in range of -90 to 90" is a far
@@ -203,19 +286,76 @@ async def fetch_hourly() -> list[HourlyReading]:
             reason = (response.json() or {}).get("reason", "")
         except ValueError:
             pass
-        raise RuntimeError(f"Open-Meteo {response.status_code}: {reason or response.text[:200]}")
+        raise RuntimeError(f"{what} {response.status_code}: {reason or response.text[:200]}")
+    return response.json()
 
-    return parse_hourly(response.json(), datetime.now(UTC))
+
+def _where() -> dict[str, Any]:
+    return {"latitude": settings.weather_lat, "longitude": settings.weather_lon}
+
+
+async def fetch_hourly(client: httpx.AsyncClient) -> list[HourlyReading]:
+    params = {
+        **_where(),
+        "hourly": ",".join(HOURLY_FIELDS),
+        # UTC in, UTC in the table. Local time is a display concern, and the
+        # only place it matters is picking out "today" for the high and low.
+        "timezone": "UTC",
+        "past_days": PAST_DAYS,
+        "forecast_days": FORECAST_DAYS,
+    }
+    return parse_hourly(await _get_json(client, ENDPOINT, params), datetime.now(UTC))
+
+
+async def fetch_daily(client: httpx.AsyncClient) -> list[DailyReading]:
+    params = {
+        **_where(),
+        "daily": ",".join(DAILY_FIELDS),
+        # Local, unlike the hourly call: a day's high, sunrise and UV peak only
+        # mean something over the local calendar day.
+        "timezone": local_zone().key,
+        "past_days": PAST_DAYS,
+        "forecast_days": DAILY_FORECAST_DAYS,
+    }
+    payload = await _get_json(client, ENDPOINT, params)
+    return parse_daily(payload, datetime.now(UTC), local_today())
+
+
+async def fetch_air_quality(client: httpx.AsyncClient) -> dict[datetime, int] | None:
+    """None when the air-quality host fails — it is a nice-to-have, and a dead
+    AQI feed must not cost the temperature."""
+    params = {
+        **_where(),
+        "hourly": "us_aqi",
+        "timezone": "UTC",
+        "past_days": PAST_DAYS,
+        "forecast_days": FORECAST_DAYS,
+    }
+    try:
+        payload = await _get_json(client, AIR_QUALITY_ENDPOINT, params, "Open-Meteo air quality")
+    except RuntimeError as exc:
+        log.warning("air quality skipped: %s", exc)
+        return None
+    return parse_air_quality(payload)
 
 
 async def sync_weather(session: AsyncSession) -> int:
-    """Fetch the window and upsert every hour in it. Returns rows touched."""
-    readings = await fetch_hourly()
+    """Fetch the windows and upsert every hour and day in them. Returns rows
+    touched."""
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        readings, days, aqi = await asyncio.gather(
+            fetch_hourly(client), fetch_daily(client), fetch_air_quality(client)
+        )
     if not readings:
         log.warning("open-meteo returned no hourly rows")
         return 0
 
     rows = [asdict(r) for r in readings]
+    if aqi is not None:
+        for row in rows:
+            row["us_aqi"] = aqi.get(row["observed_at"])
+    # With no AQI this run, the column is left out of the statement entirely,
+    # so the readings already archived survive the failed call.
     stmt = insert(WeatherObservation).values(rows)
     # Everything but the key is refreshed, so a forecast row becomes a real
     # reading in place the first time the sync runs after that hour passes.
@@ -224,9 +364,18 @@ async def sync_weather(session: AsyncSession) -> int:
         set_={c: stmt.excluded[c] for c in rows[0] if c != "observed_at"},
     )
     await session.execute(stmt)
-    await session.commit()
 
-    return len(rows)
+    if days:
+        daily_rows = [asdict(d) for d in days]
+        stmt = insert(WeatherDaily).values(daily_rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["date"],
+            set_={c: stmt.excluded[c] for c in daily_rows[0] if c != "date"},
+        )
+        await session.execute(stmt)
+
+    await session.commit()
+    return len(rows) + len(days)
 
 
 def window_bounds(now: datetime) -> tuple[datetime, datetime]:

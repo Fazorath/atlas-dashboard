@@ -33,6 +33,21 @@ export interface Assignment {
   overdue: boolean;
 }
 
+/** A Class session: a live class you join. A time, never a to-do — never
+ *  ticked, never counted in "Due this week". */
+export interface ClassSession {
+  ics_uid: string;
+  title: string;
+  course: string | null;
+  course_full: string | null;
+  start_at: string;
+  end_at: string | null;
+  location: string | null;
+  join_url: string | null;
+  /** Started and not over yet. */
+  in_progress: boolean;
+}
+
 export interface SchoolSummary {
   configured: boolean;
   detail: string | null;
@@ -43,6 +58,10 @@ export interface SchoolSummary {
   /** Today plus the next six days, done or not — the Today ring. */
   week_total: number;
   week_done: number;
+  /** The class on now, or the next to start — even past the window. */
+  next_class: ClassSession | null;
+  /** Class sessions from now to the end of the window, soonest first. */
+  classes: ClassSession[];
   fetched_at: string | null;
 }
 
@@ -165,6 +184,23 @@ export function lateLabel(iso: string, now = new Date()): string {
   if (hours < 24) return `${Math.floor(hours)}h late`;
   const days = Math.floor(hours / 24);
   return `${days} ${days === 1 ? "day" : "days"} late`;
+}
+
+/** "Tue 6:25 – 7:40 PM", "Today, 6:25 PM", or "Now, until 7:40 PM". */
+export function classWhen(c: ClassSession, now = new Date()): string {
+  const time = (iso: string) =>
+    new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (c.in_progress) return c.end_at ? `Now, until ${time(c.end_at)}` : "Now";
+  const span = c.end_at ? `${time(c.start_at)} – ${time(c.end_at)}` : time(c.start_at);
+  return `${dayLabel(c.start_at, now)}, ${span}`;
+}
+
+/** "in 2h 10m" / "in 25m" — the countdown to a class today. */
+export function untilLabel(iso: string, now = new Date()): string | null {
+  const minutes = Math.round((new Date(iso).getTime() - now.getTime()) / 60_000);
+  if (minutes <= 0) return null;
+  const h = Math.floor(minutes / 60);
+  return h > 0 ? `in ${h}h ${minutes % 60}m` : `in ${minutes}m`;
 }
 
 /** Soonest-first rows grouped under their local day. */

@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clock import local_today
 from app.config import settings
 from app.db import get_session
+from app.nights import main_nights
 from app.models import DailyActivity, OAuthToken, SleepSession, SyncStatus
 from app.schemas.sleep import (
     Activity,
@@ -48,7 +49,7 @@ router = APIRouter(prefix="/sleep", tags=["sleep"])
 SOURCE = "sleep"
 NOT_CONFIGURED = (
     "Create a Google Cloud OAuth client for the Google Health API and put its id, "
-    "secret and redirect URI in /srv/atlas/.env, then restart atlas-api."
+    "secret and redirect URI in .env, then restart atlas-api."
 )
 NOT_CONNECTED = "Connect your Fitbit's Google account to start archiving sleep."
 NO_DATA = "Connected — no nights archived yet. The first sync pulls 90 days."
@@ -133,23 +134,7 @@ def _activity(row: DailyActivity) -> Activity:
 
 
 async def _nights(session: AsyncSession, since: date) -> list[SleepSession]:
-    """One session per wake date: the one Google flags as main sleep, else the
-    longest that isn't a nap, else the longest. Oldest first."""
-    rows = (
-        await session.execute(
-            select(SleepSession)
-            .where(SleepSession.wake_date >= since)
-            .order_by(SleepSession.wake_date, SleepSession.start_at)
-        )
-    ).scalars()
-
-    best: dict[date, SleepSession] = {}
-    for row in rows:
-        rank = (row.is_main, not row.is_nap, row.minutes_asleep or 0)
-        held = best.get(row.wake_date)
-        if held is None or rank > (held.is_main, not held.is_nap, held.minutes_asleep or 0):
-            best[row.wake_date] = row
-    return [best[d] for d in sorted(best)]
+    return await main_nights(session, since)
 
 
 @router.get("/", response_model=SleepSummary)
@@ -253,16 +238,16 @@ async def oauth_callback(
     session: AsyncSession = Depends(get_session),
 ) -> RedirectResponse:
     """Google's redirect lands here, through nginx and `tailscale serve`. Always
-    answers with a redirect back to the Sleep screen, carrying the outcome."""
+    answers with a redirect back to the Status screen, carrying the outcome."""
     if error:
         message = "Google sign-in was cancelled" if error == "access_denied" else f"Google answered {error}"
-        return RedirectResponse(f"/sleep?oauth_error={quote(message)}", status_code=303)
+        return RedirectResponse(f"/status?oauth_error={quote(message)}", status_code=303)
     try:
         await _finish(session, code, state)
     except (ValueError, RuntimeError) as exc:
         log.warning("google health consent failed: %s", exc)
-        return RedirectResponse(f"/sleep?oauth_error={quote(str(exc))}", status_code=303)
-    return RedirectResponse("/sleep?connected=1", status_code=303)
+        return RedirectResponse(f"/status?oauth_error={quote(str(exc))}", status_code=303)
+    return RedirectResponse("/status?connected=1", status_code=303)
 
 
 @router.post("/oauth/complete", response_model=Connection)

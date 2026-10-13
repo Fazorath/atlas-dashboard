@@ -28,6 +28,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(detail, res.status);
   }
 
+  // A DELETE answers 204 with no body to parse.
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
@@ -77,6 +79,23 @@ export interface WeatherNow {
   weather_code: number | null;
   description: string;
   is_day: boolean | null;
+  uv_index: number | null;
+  /** US AQI for the hour, from Open-Meteo's air-quality model. */
+  us_aqi: number | null;
+}
+
+/** One local day of the 7-day strip. */
+export interface DailyPoint {
+  date: string;
+  temperature_max_c: number | null;
+  temperature_min_c: number | null;
+  precipitation_probability_max: number | null;
+  precipitation_sum_mm: number | null;
+  weather_code: number | null;
+  description: string;
+  sunrise: string | null;
+  sunset: string | null;
+  uv_index_max: number | null;
 }
 
 export interface WeatherSummary {
@@ -85,6 +104,8 @@ export interface WeatherSummary {
   high_c: number | null;
   low_c: number | null;
   hourly: HourlyPoint[];
+  /** Today and the six days after it — check `date`, the first may be missing. */
+  daily: DailyPoint[];
   fetched_at: string | null;
   detail: string | null;
 }
@@ -123,11 +144,59 @@ export interface CategorySpend {
   share: number;
 }
 
+/** "Where it went": categorised Out only, shares of categorised Out, and the
+ *  Uncategorised remainder said once beside it. */
+export interface Spending {
+  categories: CategorySpend[];
+  uncategorised: { amount: number; count: number } | null;
+  /** Where "open Securo" goes; null when SECURO_PUBLIC_URL is unset. */
+  securo_url: string | null;
+}
+
+export interface Account {
+  id: string;
+  name: string;
+  institution: string | null;
+  kind: string;
+  balance: number;
+  currency: string;
+}
+
+/** An outflow Securo projects from a recurring transaction. */
+export interface Bill {
+  date: string;
+  description: string;
+  amount: number;
+  currency: string;
+  category: string | null;
+  color: string | null;
+}
+
+export interface Goal {
+  name: string;
+  target: number;
+  current: number;
+  currency: string;
+  /** 0–1. */
+  share: number;
+  target_date: string | null;
+  /** Securo's own verdict: "ahead", "on_track", "behind"… */
+  on_track: string | null;
+  monthly_contribution: number | null;
+  color: string | null;
+}
+
 export interface MonthPoint {
   month: string;
   income: number;
   expenses: number;
   net: number;
+}
+
+/** One day's Out, transfers left out; `date` is "YYYY-MM-DD". */
+export interface DayOut {
+  date: string;
+  amount: number;
 }
 
 /** Phase 4 — Audiobookshelf, live-proxied and read-only. Times are seconds and
@@ -166,6 +235,30 @@ export interface ListeningSummary {
   fetched_at: string | null;
 }
 
+export interface ListeningDay {
+  date: string;
+  seconds: number;
+}
+
+export interface FinishedBook {
+  item_id: string;
+  title: string;
+  author: string | null;
+  finished_at: string;
+  cover_url: string | null;
+  link: string | null;
+}
+
+/** ABS's own history, read live: seconds per local day for the window (zero
+ *  where ABS has nothing), and the books finished, newest first. */
+export interface ListeningStats {
+  configured: boolean;
+  detail: string | null;
+  days: ListeningDay[];
+  finished: FinishedBook[];
+  fetched_at: string | null;
+}
+
 export const getHealth = () => api<{ status: string; service: string }>("/health");
 export const getSyncStatus = () => api<SourceStatus[]>("/sync/status");
 export const getWeather = () => api<WeatherSummary>("/weather/");
@@ -174,3 +267,10 @@ export const getFinanceCategories = () => api<CategorySpend[]>("/finance/categor
 export const getFinanceTrend = (months: number) =>
   api<MonthPoint[]>(`/finance/trend?months=${months}`);
 export const getListening = () => api<ListeningSummary>("/listening/");
+export const getListeningStats = (days: number) =>
+  api<ListeningStats>(`/listening/stats?days=${days}`);
+export const getSpending = () => api<Spending>("/finance/spending");
+export const getAccounts = () => api<Account[]>("/finance/accounts");
+export const getBills = (days: number) => api<Bill[]>(`/finance/bills?days=${days}`);
+export const getGoals = () => api<Goal[]>("/finance/goals");
+export const getDailyOut = () => api<DayOut[]>("/finance/daily");

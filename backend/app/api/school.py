@@ -15,14 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clock import local_zone
 from app.config import settings
 from app.db import get_session
-from app.models import Assignment, AssignmentStatus
-from app.schemas.school import AssignmentOut, SchoolSummary
+from app.models import Assignment, AssignmentStatus, ClassSession
+from app.schemas.school import AssignmentOut, ClassOut, SchoolSummary
 
 router = APIRouter(prefix="/school", tags=["school"])
 
 NOT_CONFIGURED = (
     "Copy your feed link from Canvas (Calendar, then Calendar Feed) into "
-    "/srv/atlas/.env as CANVAS_ICS_URL, then restart atlas-api."
+    ".env as CANVAS_ICS_URL, then restart atlas-api."
 )
 NO_DATA = "No assignments archived yet — run POST /api/sync/school."
 
@@ -30,6 +30,8 @@ NO_DATA = "No assignments archived yet — run POST /api/sync/school."
 #: archives the whole term the feed covers, and without a cut-off every old
 #: assignment you handed in but never ticked would sit on the card forever.
 OVERDUE_DAYS = 7
+#: A class with no end time is treated as this long, for "in progress".
+DEFAULT_CLASS = timedelta(hours=1)
 
 
 def _local_midnight(now: datetime, plus_days: int = 0) -> datetime:
@@ -69,6 +71,37 @@ def _out(row: Assignment, done_at: datetime | None, now: datetime) -> Assignment
         done_at=done_at,
         overdue=done_at is None and row.due_at < now,
     )
+
+
+def _class_out(row: ClassSession, now: datetime) -> ClassOut:
+    end = row.end_at or row.start_at + DEFAULT_CLASS
+    return ClassOut(
+        ics_uid=row.ics_uid,
+        title=row.title,
+        course=course_label(row.course),
+        course_full=row.course,
+        start_at=row.start_at,
+        end_at=row.end_at,
+        location=row.location,
+        join_url=row.join_url,
+        in_progress=row.start_at <= now < end,
+    )
+
+
+async def _classes(session: AsyncSession, now: datetime, until: datetime) -> list[ClassOut]:
+    """Sessions not yet over that start before `until`, soonest first."""
+    rows = (
+        await session.execute(
+            select(ClassSession)
+            .where(ClassSession.removed_at.is_(None))
+            .where(
+                func.coalesce(ClassSession.end_at, ClassSession.start_at + DEFAULT_CLASS) > now
+            )
+            .where(ClassSession.start_at < until)
+            .order_by(ClassSession.start_at)
+        )
+    ).scalars()
+    return [_class_out(r, now) for r in rows]
 
 
 @router.get("/", response_model=SchoolSummary)
@@ -114,12 +147,20 @@ async def school_root(
         )
     ).one()
 
+    classes = await _classes(session, now, _local_midnight(now, days))
+    # The next class may be past the window (a break week); look further for it.
+    next_class = classes[0] if classes else next(
+        iter(await _classes(session, now, now + timedelta(days=60))), None
+    )
+
     return SchoolSummary(
         configured=True,
         overdue=[_out(a, d, now) for a, d in overdue],
         upcoming=[_out(a, d, now) for a, d in upcoming],
         week_total=week_total,
         week_done=week_done,
+        next_class=next_class,
+        classes=classes,
         fetched_at=fetched_at,
     )
 

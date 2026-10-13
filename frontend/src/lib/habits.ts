@@ -26,6 +26,20 @@ export interface Habit {
   longest_streak: number;
   /** 0–1, over the last 30 days or since the habit began if that's sooner. */
   completion_30d: number;
+  /** Measured habits only (ADR 0001): the linked Health figure, its target,
+   *  and the figure on `date` — null when the Source has nothing yet. */
+  metric: string | null;
+  target: number | null;
+  value: number | null;
+  /** The tick came from the data rather than your hand. */
+  auto: boolean;
+}
+
+export interface Metric {
+  key: string;
+  label: string;
+  unit: string;
+  default_target: number;
 }
 
 export interface HabitDefinition {
@@ -35,6 +49,8 @@ export interface HabitDefinition {
   sort_order: number;
   created_at: string;
   archived_at: string | null;
+  metric: string | null;
+  target: number | null;
 }
 
 export interface HistoryDay {
@@ -146,7 +162,42 @@ export function useCreateHabit() {
 
 export function useUpdateHabit() {
   return useHabitWrite(
-    ({ id, ...patch }: { id: number; name?: string; archived?: boolean; sort_order?: number }) =>
-      api<HabitDefinition>(`/habits/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    ({
+      id,
+      ...patch
+    }: {
+      id: number;
+      name?: string;
+      archived?: boolean;
+      sort_order?: number;
+      metric?: string | null;
+      target?: number;
+    }) => api<HabitDefinition>(`/habits/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   );
+}
+
+/** The Health figures a habit can be linked to. They never change at runtime. */
+export function useMetrics() {
+  return useQuery({
+    queryKey: ["habits", "metrics"],
+    queryFn: () => api<Metric[]>("/habits/metrics"),
+    staleTime: Infinity,
+  });
+}
+
+/** "6h 30m of 8h" / "7,412 of 10,000 steps" — a Measured habit's figure. */
+export function measuredLine(habit: Pick<Habit, "metric" | "target" | "value">): string | null {
+  if (!habit.metric || habit.target == null) return null;
+  const fmt = (v: number) => {
+    if (habit.metric === "sleep_hours") {
+      const m = Math.round(v * 60);
+      return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+    }
+    return Math.round(v).toLocaleString();
+  };
+  const target =
+    habit.metric === "sleep_hours"
+      ? `${habit.target}h`
+      : `${habit.target.toLocaleString()}${habit.metric === "steps" ? " steps" : " min"}`;
+  return habit.value == null ? `No data yet · goal ${target}` : `${fmt(habit.value)} of ${target}`;
 }

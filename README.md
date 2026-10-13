@@ -1,10 +1,8 @@
 # Atlas
 
-Personal life dashboard for `arcanum`. Aggregates weather, Securo finances,
+Self-hosted personal life dashboard. Aggregates weather, Securo finances,
 Audiobookshelf listening, habits, Canvas assignments and Fitbit sleep into one
 tailnet-only page.
-
-Fourth compose project on this host, alongside `nas`, `securo` and `study-web`.
 
 Full architecture notes, naming rules and per-phase gotchas live in an internal
 runbook not included in this public copy — see the comments in
@@ -13,7 +11,7 @@ runbook not included in this public copy — see the comments in
 ## Run it
 
 ```bash
-cd /srv/atlas
+cd atlas
 cp .env.example .env && chmod 600 .env    # already done if .env exists
 docker compose up -d --build
 curl -s 127.0.0.1:8187/api/health
@@ -57,8 +55,9 @@ binds beyond `127.0.0.1`.
 4. Uncomment or add the line in `cron/crontab`.
 5. Build the widget against `GET /api/<name>/`.
 
-Every attempt lands in `sync_runs`, which is what the dashboard reads for
-"synced 4h ago" and for failure banners. Check it with:
+Every attempt lands in `sync_runs`, which is what the Status screen and each
+Area's Freshness line ("checked 29m ago") read. Register plumbing with
+`hidden=True` (the `noop` heartbeat) to keep it off the Status screen. Check it with:
 
 ```bash
 curl -s 127.0.0.1:8187/api/sync/status | python3 -m json.tool
@@ -85,6 +84,13 @@ inside", with no per-accent class maps anywhere.
 Retune the whole look from the token block at the top of
 `frontend/src/index.css`. Nothing below it names a colour, a radius or a font.
 
+Areas: Health, School, Money and Habits are in the nav; Weather and Listening
+are reached only by tapping their Today Card. Every Today Card opens its Area —
+the title is the link, and a tap anywhere off a control follows it. Each Area
+header shows its Source's Freshness. Today shows no plumbing except one Problem
+chip when a Source needs you; the full list is the **Status screen** (`/status`,
+behind the avatar menu), which also holds the Google Health connection.
+
 Navigation splits at 900px: a segmented pill nav in the header above it, a
 floating icon tab bar at the bottom below it, where the active tab lights up in
 its own section's accent.
@@ -102,12 +108,17 @@ as a forecast is overwritten by the real reading once that hour has passed. The
 card reads the archive, never the upstream, which is why a failed sync costs
 freshness and not the card.
 
-Configured for your home coordinates. The two lines in `.env` are the whole setup;
+Each sync makes three calls: hourly forecast (UTC, now with UV index), daily
+forecast in the local zone into `weather_daily` (7-day strip, sunrise/sunset,
+peak UV), and Open-Meteo's air-quality host for hourly US AQI. A failed AQI call
+is logged and skipped without touching the AQI already archived.
+
+Set your home coordinates in `.env`. The two lines in `.env` are the whole setup;
 changing location is editing them and restarting:
 
 ```bash
-WEATHER_LAT=29.6516
-WEATHER_LON=-82.3248
+WEATHER_LAT=40.7128
+WEATHER_LON=-74.0060
 
 docker compose up -d atlas-api
 curl -X POST 127.0.0.1:8187/api/sync/weather
@@ -141,9 +152,16 @@ docker compose up -d atlas-api
 curl -s 127.0.0.1:8187/api/finance/ | python3 -m json.tool
 ```
 
-Three endpoints, all reading straight through: `GET /api/finance/` (the summary
-behind the Today tile and the Money hero), `/api/finance/categories`, and
-`/api/finance/trend?months=`.
+All reading straight through: `GET /api/finance/` (the summary behind the Today
+tile and the Money hero), `/categories`, `/trend?months=`, `/spending`
+(categorised Out only, plus the Uncategorised amount and transaction count),
+`/accounts`, `/bills?days=` (Securo's projected outflows from recurring
+transactions) and `/goals`.
+
+Securo's no-category bucket arrives named in the server's language ("Sem
+categoria"); Atlas identifies it by its null `category_id` and calls it
+**Uncategorised**. "Where it went" never draws it as a bar — it is a nudge line
+linking to `SECURO_PUBLIC_URL` (blank renders no link).
 
 Things worth knowing before touching it:
 
@@ -201,6 +219,7 @@ ABS_PUBLIC_URL=http://your-tailnet-host.ts.net:13378
 
 ```
 GET  /api/listening/            # current book, everything in progress, today's time
+GET  /api/listening/stats?days= # seconds per day + finished books (Listening screen)
 GET  /api/listening/cover/{id}  # cover art, proxied
 POST /api/sync/listening        # reachability probe; writes nothing
 ```
@@ -270,6 +289,13 @@ DELETE /api/habits/{id}             # hard delete, ticks included — archive is
 - **Toggle is optimistic.** For today the streak moves by one immediately; for a
   past day it waits for the server, because it depends on the neighbours.
 - The Habits week strip is the backfill picker: tap yesterday, then tick.
+- **Measured habits** (ADR 0001, `app/measured.py`): in edit mode a habit can be
+  linked to a Health figure (`sleep_hours`, `steps`, `active_minutes`) and a
+  target. After every Health sync Atlas ticks the last 7 days where the figure
+  reaches the target (`habit_entries.source = 'measured'`); linking re-checks 90
+  days, never before the habit was created. A manual tick or untick on a
+  measured habit is stored as `source = 'manual'` (an untick as `done = false`)
+  and is never overwritten. Every count filters on `done`.
 
 ## School (phase 6)
 
@@ -306,7 +332,11 @@ POST /api/school/{uid}/toggle   # flip your done tick
   likely handed in. Lateness is the Overdue card's job.
 - **Registered as `school`**, the front end's key — not `canvas`, which is what
   the phase-1 crontab stub said.
-- Only `event-assignment-*` UIDs are kept; lectures and office hours are skipped.
+- `event-assignment-*` UIDs are Assignments. `event-calendar-event-*` are
+  **Class sessions** (the weekly live online classes), archived to
+  `class_sessions` with the meeting link pulled from the description; the API
+  returns `next_class` and `classes`. Never ticked, never counted in "Due this
+  week"; Today's Due card mentions one only on the day it happens.
   `Title [Course]` is split on the last bracketed suffix. Anything due at 11:59pm
   arrives as a bare DATE and is stored as 23:59 local with `all_day`, which the
   UI renders as "End of day". Calendar-month links are rebuilt into the
@@ -323,7 +353,10 @@ POST /api/school/{uid}/toggle   # flip your done tick
   `docker logs`. A reset feed shows up as *HTTP 404 — was the feed URL reset in
   Canvas?*
 
-## Sleep (phase 7)
+## Health (phase 7)
+
+The Area was called Sleep until 2026-10; `/sleep` redirects to `/health`, and
+the API, the `sleep` source key and the OAuth redirect URI keep their names.
 
 Fitbit through the **Google Health API** (`health.googleapis.com/v4`), archived
 hourly — the weather pattern. **Not `dev.fitbit.com`**: the legacy Fitbit Web
@@ -359,7 +392,7 @@ POST /api/sleep/disconnect       # revoke + forget the token; nights are kept
    `https://your-tailnet-host.ts.net:8446/api/sleep/oauth/callback`.
    **Copy the secret now** — Google shows it once.
 6. Into `.env`, then `docker compose up -d atlas-api` and press **Connect
-   Fitbit** on the Sleep screen:
+   Fitbit** on the Status screen:
 
 ```
 GOOGLE_OAUTH_CLIENT_ID=...apps.googleusercontent.com
@@ -371,7 +404,7 @@ Google accepts the `ts.net` redirect — confirmed 2026-09-22. Register it on th
 client under **Authorized redirect URIs**; until you do, every sign-in fails
 with `redirect_uri_mismatch`, which is the same error a wrong port gives. If it
 is ever refused, register `http://localhost:8080/oauth/callback` instead and set that
-as `GOOGLE_OAUTH_REDIRECT_URI`. The Sleep screen then opens Google in a new tab
+as `GOOGLE_OAUTH_REDIRECT_URI`. The Status screen then opens Google in a new tab
 and asks you to paste the address it lands on. No code change either way.
 
 ### Things worth knowing

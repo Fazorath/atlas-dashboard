@@ -50,6 +50,8 @@ FALLBACK_LIFETIME = timedelta(hours=23)
 TREND_MONTHS = 6
 TREND_MONTHS_MAX = 12
 
+UNCATEGORISED = "Uncategorised"
+
 
 @dataclass(frozen=True)
 class _Token:
@@ -103,6 +105,55 @@ class CategorySpend:
     color: str | None
     amount: float
     share: float  # 0–1, not 0–100
+    #: Out that Securo has no category for yet. Shown as a to-do beside the
+    #: breakdown, never as a category of its own.
+    uncategorised: bool = False
+
+
+@dataclass(frozen=True)
+class Account:
+    """One account's balance, in its own currency."""
+
+    id: str
+    name: str
+    institution: str | None
+    kind: str
+    balance: float
+    currency: str
+
+
+@dataclass(frozen=True)
+class Bill:
+    """An upcoming outflow Securo projects from a recurring transaction."""
+
+    date: date
+    description: str
+    amount: float
+    currency: str
+    category: str | None
+    color: str | None
+
+
+@dataclass(frozen=True)
+class DayOut:
+    """One day's spending, in the primary currency."""
+
+    date: date
+    amount: float
+
+
+@dataclass(frozen=True)
+class Goal:
+    name: str
+    target: float
+    current: float
+    currency: str
+    share: float  # 0–1
+    target_date: date | None
+    #: Securo's own verdict: "ahead", "on_track", "behind"… passed through.
+    on_track: str | None
+    monthly_contribution: float | None
+    color: str | None
 
 
 @dataclass(frozen=True)
@@ -300,13 +351,20 @@ def parse_categories(payload: Any) -> list[CategorySpend]:
 
     rows = [
         CategorySpend(
-            name=row.get("category_name") or "Uncategorised",
+            # Securo names its no-category bucket in the server's language
+            # ("Sem categoria"); the null id is what actually identifies it.
+            name=(
+                UNCATEGORISED
+                if row.get("category_id") is None
+                else row.get("category_name") or UNCATEGORISED
+            ),
             icon=row.get("category_icon") or None,
             color=row.get("category_color") or None,
             amount=_outflow(row.get("total")),
             # Securo sends a percentage; Atlas carries fractions, so the bar
             # width is the number and no component divides by 100.
             share=max(0.0, min(1.0, _money(row.get("percentage")) / 100)),
+            uncategorised=row.get("category_id") is None,
         )
         for row in payload
         if isinstance(row, dict)
@@ -350,6 +408,159 @@ async def fetch_trend(months: int = TREND_MONTHS) -> list[MonthPoint]:
     async with _client() as client:
         payload = await _get(client, "/api/dashboard/monthly-trend", {"months": months})
     return parse_trend(payload)
+
+
+def parse_accounts(payload: Any) -> list[Account]:
+    if not isinstance(payload, list):
+        return []
+    accounts = [
+        Account(
+            id=str(row.get("id") or ""),
+            name=row.get("display_name") or row.get("name") or "Account",
+            institution=row.get("institution_name") or None,
+            kind=str(row.get("type") or ""),
+            balance=_money(row.get("current_balance", row.get("balance"))),
+            currency=row.get("currency") or "USD",
+        )
+        for row in payload
+        if isinstance(row, dict) and not row.get("is_closed")
+    ]
+    # Largest magnitude first: a card's debt matters as much as savings do.
+    return sorted(accounts, key=lambda a: abs(a.balance), reverse=True)
+
+
+def parse_bills(payload: Any) -> list[Bill]:
+    if not isinstance(payload, list):
+        return []
+    bills = []
+    for row in payload:
+        if not isinstance(row, dict) or str(row.get("type")) != "debit":
+            continue
+        day = _as_date(row.get("date"))
+        if day is None:
+            continue
+        amount = row.get("amount_primary")
+        bills.append(
+            Bill(
+                date=day,
+                description=str(row.get("description") or "Bill"),
+                amount=_outflow(amount if amount is not None else row.get("amount")),
+                currency=row.get("currency") or "USD",
+                category=row.get("category_name") or None,
+                color=row.get("category_color") or None,
+            )
+        )
+    return sorted(bills, key=lambda b: (b.date, b.description))
+
+
+def parse_goals(payload: Any) -> list[Goal]:
+    if not isinstance(payload, list):
+        return []
+    goals = []
+    for row in payload:
+        if not isinstance(row, dict) or row.get("status", "active") != "active":
+            continue
+        target = _money(row.get("target_amount_primary") or row.get("target_amount"))
+        current = _money(row.get("current_amount_primary") or row.get("current_amount"))
+        contribution = row.get("monthly_contribution")
+        goals.append(
+            Goal(
+                name=str(row.get("name") or "Goal"),
+                target=target,
+                current=current,
+                currency=row.get("currency") or "USD",
+                share=max(0.0, min(1.0, _money(row.get("percentage")) / 100)),
+                target_date=_as_date(row.get("target_date")),
+                on_track=row.get("on_track") or None,
+                monthly_contribution=_money(contribution) if contribution is not None else None,
+                color=row.get("color") or None,
+            )
+        )
+    return goals
+
+
+async def fetch_accounts() -> list[Account]:
+    async with _client() as client:
+        return parse_accounts(await _get(client, "/api/accounts"))
+
+
+async def fetch_bills(start: date, end: date) -> list[Bill]:
+    """Projected outflows in [start, end] — what Securo expects to leave from
+    recurring transactions you have set up there."""
+    params = {"from": start.isoformat(), "to": end.isoformat()}
+    async with _client() as client:
+        return parse_bills(await _get(client, "/api/dashboard/projected-transactions", params))
+
+
+async def fetch_goals() -> list[Goal]:
+    async with _client() as client:
+        return parse_goals(await _get(client, "/api/goals"))
+
+
+async def fetch_uncategorised_count(start: date, end: date) -> int:
+    """How many outgoing transactions in [start, end] have no category — the
+    "N transactions" in Money's nudge. One row is asked for; `total` is read."""
+    params = {
+        "uncategorized": "true",
+        "type": "debit",
+        "exclude_ignored": "true",
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "limit": 1,
+    }
+    async with _client() as client:
+        payload = await _get(client, "/api/transactions", params)
+    try:
+        return int((payload or {}).get("total") or 0)
+    except (TypeError, ValueError, AttributeError):
+        return 0
+
+
+#: Securo's page size for `/api/transactions`; a month is rarely one page short.
+PAGE_LIMIT = 500
+
+
+def parse_daily_out(items: Any, start: date, end: date) -> list[DayOut]:
+    """Every day in [start, end] with what left that day, zeros included.
+
+    Transfers between your own accounts (a card payment from checking) are not
+    spending; leaving out the rows Securo pairs as transfers is what makes the
+    days add up to its own month Out."""
+    totals: dict[date, float] = {}
+    for row in items if isinstance(items, list) else []:
+        if not isinstance(row, dict) or row.get("transfer_pair_id"):
+            continue
+        day = _as_date(row.get("date"))
+        if day is None or not start <= day <= end:
+            continue
+        amount = row.get("amount_primary")
+        totals[day] = totals.get(day, 0.0) + _outflow(
+            amount if amount is not None else row.get("amount")
+        )
+    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    return [DayOut(date=d, amount=round(totals.get(d, 0.0), 2)) for d in days]
+
+
+async def fetch_daily_out(start: date, end: date) -> list[DayOut]:
+    """Out per day over [start, end], read page by page from the transaction
+    list — Securo has no per-day aggregate."""
+    params: dict[str, Any] = {
+        "type": "debit",
+        "exclude_ignored": "true",
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "limit": PAGE_LIMIT,
+    }
+    items: list[Any] = []
+    async with _client() as client:
+        # Bounded, so a paging bug upstream can't spin forever.
+        for page in range(1, 21):
+            payload = await _get(client, "/api/transactions", {**params, "page": page}) or {}
+            batch = payload.get("items") or []
+            items.extend(batch)
+            if len(batch) < PAGE_LIMIT or len(items) >= int(payload.get("total") or 0):
+                break
+    return parse_daily_out(items, start, end)
 
 
 async def check_securo(session: AsyncSession) -> int:

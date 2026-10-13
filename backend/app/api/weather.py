@@ -12,22 +12,23 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clock import local_zone
+from app.clock import local_today, local_zone
 from app.config import settings
 from app.db import get_session
-from app.models import WeatherObservation
-from app.schemas.weather import HourlyPoint, WeatherNow, WeatherSummary
+from app.models import WeatherDaily, WeatherObservation
+from app.schemas.weather import DailyPoint, HourlyPoint, WeatherNow, WeatherSummary
 from app.sources.weather import describe
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/weather", tags=["weather"])
 
-NOT_CONFIGURED = "Add WEATHER_LAT and WEATHER_LON to /srv/atlas/.env, then restart atlas-api."
+NOT_CONFIGURED = "Add WEATHER_LAT and WEATHER_LON to .env, then restart atlas-api."
 NO_DATA = "No readings archived yet — run POST /api/sync/weather."
 
 # How many hours the card's strip may ask for.
 STRIP_HOURS = 12
+DAILY_DAYS = 7
 
 
 def _local_day_bounds(now: datetime) -> tuple[datetime, datetime]:
@@ -68,6 +69,23 @@ def _to_now(row: WeatherObservation) -> WeatherNow:
         weather_code=row.weather_code,
         description=describe(row.weather_code),
         is_day=row.is_day,
+        uv_index=row.uv_index,
+        us_aqi=row.us_aqi,
+    )
+
+
+def _to_day(row: WeatherDaily) -> DailyPoint:
+    return DailyPoint(
+        date=row.date,
+        temperature_max_c=row.temperature_max_c,
+        temperature_min_c=row.temperature_min_c,
+        precipitation_probability_max=row.precipitation_probability_max,
+        precipitation_sum_mm=row.precipitation_sum_mm,
+        weather_code=row.weather_code,
+        description=describe(row.weather_code),
+        sunrise=row.sunrise,
+        sunset=row.sunset,
+        uv_index_max=row.uv_index_max,
     )
 
 
@@ -119,12 +137,27 @@ async def weather_root(session: AsyncSession = Depends(get_session)) -> WeatherS
         .all()
     )
 
+    today = local_today()
+    daily = (
+        (
+            await session.execute(
+                select(WeatherDaily)
+                .where(WeatherDaily.date >= today)
+                .where(WeatherDaily.date < today + timedelta(days=DAILY_DAYS))
+                .order_by(WeatherDaily.date)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
     return WeatherSummary(
         configured=True,
         now=_to_now(current),
         high_c=high,
         low_c=low,
         hourly=[_to_point(r) for r in upcoming],
+        daily=[_to_day(d) for d in daily],
         fetched_at=current.fetched_at,
     )
 
