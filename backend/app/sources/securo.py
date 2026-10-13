@@ -6,7 +6,7 @@ containers away, and a second copy that drifts is worse than no copy. So this
 module has no models, no migration and no upsert — it fetches, reshapes into
 Atlas's own dataclasses, and hands them straight to the router.
 
-Reached at `http://backend:8000` over `securo_default`. The browser never calls
+Reached at `http://backend:8000` over Securo's compose network. The browser never calls
 Securo directly: its CORS policy allows only its own frontend origin, and doing
 it server-side keeps the credentials out of the bundle.
 

@@ -11,7 +11,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 
 import { AccountMenu } from "@/components/layout/AccountMenu";
-import { NAV_SECTIONS } from "@/lib/sections";
+import { navSections } from "@/lib/sections";
 import { cn } from "@/lib/utils";
 
 export function AppShell() {
@@ -29,7 +29,7 @@ export function AppShell() {
         </NavLink>
 
         <nav aria-label="Sections" className="flex items-center gap-1 rounded-full bg-surface p-[5px]">
-          {NAV_SECTIONS.map((section) => (
+          {navSections().map((section) => (
             <NavLink
               key={section.to}
               to={section.to}
@@ -70,7 +70,7 @@ function TabBar() {
       className="fixed inset-x-[18px] z-20 flex h-[68px] items-center justify-around rounded-full border border-border-subtle bg-surface-2 px-2 lap:hidden"
       style={{ bottom: "max(20px, env(safe-area-inset-bottom))" }}
     >
-      {NAV_SECTIONS.map((section) => {
+      {navSections().map((section) => {
         const Icon = section.icon;
         return (
           <NavLink

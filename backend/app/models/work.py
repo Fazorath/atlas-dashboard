@@ -1,4 +1,4 @@
-"""Work — the shifts on the paper schedule you're handed each week.
+"""Work — the shifts you work each week, entered by hand.
 
 Like habits, you are the upstream: these rows are the only record, nothing
 syncs into them, and they are written only from the Edit week sheet.
@@ -28,7 +28,7 @@ class WorkWeek(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, default=OWNER_ID, server_default=str(OWNER_ID)
     )
-    # Always a Monday: the paper schedule runs Monday to Sunday.
+    # Always a Monday: a week runs Monday to Sunday.
     week_start: Mapped[date] = mapped_column(Date, primary_key=True)
     saved_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

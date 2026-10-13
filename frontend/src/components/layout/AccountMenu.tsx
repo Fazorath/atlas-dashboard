@@ -6,10 +6,14 @@ import { Activity } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { ownerName } from "@/lib/config";
 import { problemsOf, useSources } from "@/lib/sources";
 import { cn } from "@/lib/utils";
 
-export const OWNER_INITIAL = "E";
+/** The first letter of atlas.yaml's `name`, or "A" for Atlas without one. */
+function ownerInitial(): string {
+  return (ownerName().charAt(0) || "A").toUpperCase();
+}
 
 export function AccountMenu({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
@@ -41,7 +45,7 @@ export function AccountMenu({ className }: { className?: string }) {
         onClick={() => setOpen((o) => !o)}
         className="pressable relative grid size-11 shrink-0 place-items-center rounded-full bg-sleep text-[16px] font-extrabold text-bg"
       >
-        {OWNER_INITIAL}
+        {ownerInitial()}
         {problems.length ? (
           <span
             aria-hidden

@@ -2,7 +2,7 @@
 
    The API serves Celsius because that is what the archive stores; the choice of
    what to read is made here, once, so no component does arithmetic on a
-   temperature. Flip DISPLAY_UNIT and the whole app changes units.
+   temperature. `units:` in config/modules/open_meteo.yaml switches the whole app.
 
    Nothing here talks to Open-Meteo. The card reads Atlas's own archive, so a
    dead upstream costs freshness and not the card — the last good reading stays
@@ -24,10 +24,9 @@ import {
 import { useQuery } from "@tanstack/react-query";
 
 import { getWeather } from "@/lib/api";
+import { temperatureUnit } from "@/lib/config";
 
 export const WEATHER_KEY = ["weather"] as const;
-
-const DISPLAY_UNIT: "F" | "C" = "F";
 
 export function useWeather() {
   const query = useQuery({
@@ -50,7 +49,7 @@ export function useWeather() {
  *  between a dash and a skeleton rather than being handed "NaN°". */
 export function formatTemp(celsius: number | null | undefined): string | null {
   if (celsius == null || Number.isNaN(celsius)) return null;
-  const value = DISPLAY_UNIT === "F" ? celsius * (9 / 5) + 32 : celsius;
+  const value = temperatureUnit() === "F" ? celsius * (9 / 5) + 32 : celsius;
   return `${Math.round(value)}°`;
 }
 

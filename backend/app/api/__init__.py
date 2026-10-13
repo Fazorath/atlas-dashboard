@@ -2,11 +2,12 @@
 
 from fastapi import APIRouter
 
-from app.api import boards, finance, habits, health, listening, school, sleep, sync, weather, work
+from app.api import boards, config, finance, habits, health, listening, school, sleep, sync, weather, work
 
 api_router = APIRouter(prefix="/api")
 
 api_router.include_router(health.router)
+api_router.include_router(config.router)
 api_router.include_router(sync.router)
 api_router.include_router(weather.router)
 api_router.include_router(finance.router)

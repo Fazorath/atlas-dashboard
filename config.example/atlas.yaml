@@ -1,0 +1,22 @@
+# Atlas — who this dashboard is for and what it shows.
+# Copy this folder to `config/` and edit. Restart atlas-api after a change:
+#   docker compose restart atlas-api
+
+# The greeting on Today: "Hello, Sam!". Leave blank for just "Hello!".
+name: Sam
+
+# Where "today" starts and ends: habit ticks, the day's weather high/low,
+# which night counts as last night. Any IANA zone name.
+timezone: America/New_York
+
+# The modules that are on. Delete a line to switch one off — its screen, its
+# widgets and its sync all go away; nothing it stored is deleted.
+# Each has its own file in modules/ (secrets go in .env, never here).
+modules:
+  - open_meteo       # Open-Meteo forecast + archive. No account needed.
+  - habits           # Daily habit ticks and streaks. No account needed.
+  - work             # Your weekly work shifts, entered by hand.
+  - securo           # Money, from a self-hosted Securo.
+  - audiobookshelf   # What you're listening to, from Audiobookshelf.
+  - canvas           # Assignments and classes, from a Canvas calendar feed.
+  - google_health    # Sleep and activity from Fitbit / Pixel Watch.

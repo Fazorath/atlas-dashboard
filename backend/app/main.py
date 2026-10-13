@@ -1,7 +1,7 @@
 """Atlas API.
 
-No app-level auth by design: Tailscale is the access boundary, same as homarr
-and glances on this host. Nothing here is published beyond 127.0.0.1.
+No app-level auth yet: whatever sits in front of Atlas (a VPN, or a reverse
+proxy with auth) is the access boundary. Ports bind to 127.0.0.1 by default.
 """
 
 import logging

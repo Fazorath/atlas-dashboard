@@ -1,5 +1,5 @@
 /* Work — reached only by tapping a Work Widget, like Weather. A Board of
-   Work's Widgets (Shift, Week); entering the week from the paper schedule is
+   Work's Widgets (Shift, Week); entering the week is
    not a Widget but the Edit week sheet behind the header button.
 
    `?edit=YYYY-MM-DD` opens the sheet on that week, which is how a "not

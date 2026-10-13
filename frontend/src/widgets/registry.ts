@@ -5,6 +5,7 @@
    so a Widget that is removed, or a Size it stops supporting, can never
    break a Board: the tile is dropped or moved to the nearest Size it has. */
 
+import { areaEnabled } from "@/lib/config";
 import { AREAS, type AreaKey } from "@/lib/sections";
 import { HABITS_WIDGETS } from "@/widgets/habits";
 import { HEALTH_WIDGETS } from "@/widgets/health";
@@ -28,8 +29,9 @@ export const WIDGETS: WidgetDef[] = [
 export const WIDGET_BY_ID = new Map(WIDGETS.map((w) => [w.id, w]));
 
 /** Today takes any Widget not kept to its Area; an Area's Board takes only
- *  its own. */
+ *  its own. A Widget whose module is off in atlas.yaml goes nowhere. */
 export function allowedOn(board: BoardKey, def: WidgetDef): boolean {
+  if (!areaEnabled(def.area)) return false;
   if (board === "today") return def.placement === "anywhere";
   return def.area === board;
 }
@@ -52,7 +54,12 @@ const TODAY: TileSpec[] = [
 /** A fresh account's arrangement. Today's is the agreed default; an Area's is
  *  all of its Widgets at their largest Size, in catalog order. */
 export function defaultBoard(board: BoardKey): TileSpec[] {
-  if (board === "today") return TODAY;
+  if (board === "today") {
+    return TODAY.filter((t) => {
+      const def = WIDGET_BY_ID.get(t.widget);
+      return def !== undefined && allowedOn("today", def);
+    });
+  }
   return widgetsFor(board as AreaKey).map((w) => ({ widget: w.id, size: w.sizes[w.sizes.length - 1] }));
 }
 

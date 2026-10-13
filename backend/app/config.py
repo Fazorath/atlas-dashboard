@@ -1,4 +1,7 @@
-"""Settings, read once from the environment at import time.
+"""Settings, read once at import time from the environment and config/*.yaml.
+
+Secrets come from the environment (.env); everything else can be set in the
+YAML files, which win where both give a value — see app/yaml_config.
 
 Every phase adds its credentials here with a safe default of empty string, so a
 half-configured stack still boots and each source can report itself as "not
@@ -6,10 +9,12 @@ configured" rather than crashing the API.
 """
 
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.yaml_config import load_yaml_settings
 
 
 class Settings(BaseSettings):
@@ -19,11 +24,18 @@ class Settings(BaseSettings):
     log_level: str = "info"
     tz: str = "America/New_York"
 
+    # config/atlas.yaml — the greeting's name ("Hello, Sam!"; blank says
+    # "Hello!") and the module ids that are on. None means no atlas.yaml: all.
+    owner_name: str = ""
+    modules: list[str] | None = None
+
     # Phase 2 — Open-Meteo, no API key.
     weather_lat: float | None = None
     weather_lon: float | None = None
+    # Display only: Atlas stores Celsius and the front end converts.
+    weather_units: Literal["fahrenheit", "celsius"] = "fahrenheit"
 
-    # Phase 3 — Securo, reached over securo_default.
+    # Phase 3 — Securo, reached over its compose network.
     securo_base_url: str = "http://backend:8000"
     securo_email: str = ""
     securo_password: str = ""
@@ -34,7 +46,7 @@ class Settings(BaseSettings):
     # SECURO_BASE_URL, which is a docker network name. Blank renders no link.
     securo_public_url: str = ""
 
-    # Phase 4 — Audiobookshelf, reached over nas_default.
+    # Phase 4 — Audiobookshelf, reached over its compose network.
     abs_base_url: str = "http://audiobookshelf:80"
     abs_token: str = ""
     # Where the *browser* can reach ABS, which is not where atlas-api reaches
@@ -59,7 +71,7 @@ class Settings(BaseSettings):
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     # Must match a URI registered on the client exactly, port included. The
-    # tailnet URL lets Google redirect straight back; a `http://localhost:...`
+    # HTTPS address you open Atlas at lets Google redirect straight back; a `http://localhost:...`
     # one works too, and the Status screen then asks you to paste the address
     # the browser landed on.
     google_oauth_redirect_uri: str = ""
@@ -117,7 +129,8 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    # Init kwargs outrank the environment in pydantic-settings, so YAML wins.
+    return Settings(**load_yaml_settings())
 
 
 settings = get_settings()

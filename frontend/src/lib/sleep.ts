@@ -102,7 +102,7 @@ export function useSleep(days = 7) {
 
 /** Ask the API for Google's consent URL. A localhost redirect can't come back
     to this page, so that flow opens Google in a new tab and leaves this one
-    waiting for the pasted address; the tailnet redirect just navigates. */
+    waiting for the pasted address; an HTTPS redirect just navigates. */
 export async function startConnect(pasteBack: boolean): Promise<void> {
   const { url } = await api<{ url: string }>("/sleep/connect");
   if (pasteBack) window.open(url, "_blank", "noopener");

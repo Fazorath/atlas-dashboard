@@ -1,4 +1,4 @@
-"""work — weekly shifts, entered by hand from the paper schedule
+"""work — weekly shifts, entered by hand
 
 Revision ID: 0008
 Revises: 0007

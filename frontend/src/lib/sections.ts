@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { areaEnabled } from "@/lib/config";
 import { SOURCE, type SourceName } from "@/lib/sources";
 
 export type Accent = "sleep" | "habits" | "due" | "money" | "weather" | "work";
@@ -110,13 +111,20 @@ export interface NavSection {
   end?: boolean;
 }
 
+/** The Areas whose module is on in atlas.yaml, in `AREAS` order. */
+export function enabledAreas(): Area[] {
+  return Object.values(AREAS).filter((a) => areaEnabled(a.key));
+}
+
 /** Today borrows the violet: it is the brand colour as well as Health's. */
-export const NAV_SECTIONS: NavSection[] = [
-  { to: "/", label: "Today", accent: "sleep", icon: Sun, end: true },
-  ...Object.values(AREAS)
-    .filter((a) => a.nav)
-    .map(({ to, label, accent, icon }) => ({ to, label, accent, icon })),
-];
+export function navSections(): NavSection[] {
+  return [
+    { to: "/", label: "Today", accent: "sleep", icon: Sun, end: true },
+    ...enabledAreas()
+      .filter((a) => a.nav)
+      .map(({ to, label, accent, icon }) => ({ to, label, accent, icon })),
+  ];
+}
 
 /** Kept for the Cards that predate `AREAS`. */
 export const WEATHER_ICON = AREAS.weather.icon;

@@ -2,7 +2,7 @@
 
    The image is served by atlas-api at /api/listening/cover/<id>, same origin:
    Audiobookshelf wants its API key on the request, and an `<img src>` pointing
-   at ABS could only carry that key by publishing it to anything on the tailnet
+   at ABS could only carry that key by publishing it to anything on the network
    with a view of the page.
 
    A missing cover is ordinary — ABS has plenty of items with no art — so a

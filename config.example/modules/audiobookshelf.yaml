@@ -1,0 +1,11 @@
+# Listening — a live, read-only view of Audiobookshelf. Atlas never writes to
+# it, so nothing here can move your place in a book.
+# API key goes in .env (ABS UI -> Settings -> API Keys):
+#   ABS_TOKEN=
+
+# Where atlas-api reaches ABS. `audiobookshelf:80` works when Atlas joins the
+# network ABS runs on (see docker-compose.override.example.yml).
+base_url: http://audiobookshelf:80
+
+# Where *your browser* reaches ABS, for the "open in Audiobookshelf" link.
+public_url: ""

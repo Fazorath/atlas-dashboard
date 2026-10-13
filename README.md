@@ -1,29 +1,65 @@
 # Atlas
 
-Self-hosted personal life dashboard. Aggregates weather, Securo finances,
-Audiobookshelf listening, habits, Canvas assignments and Fitbit sleep into one
-tailnet-only page.
+A self-hosted personal dashboard you open every day. Atlas pulls the things you
+would otherwise check in six apps (weather, money, school, sleep, habits,
+listening, work shifts) into one page of widgets you arrange yourself, and keeps
+its own archive of whatever it can.
 
-Full architecture notes, naming rules and per-phase gotchas live in an internal
-runbook not included in this public copy — see the comments in
-`backend/app/sources/` and `backend/app/sync/registry.py` instead.
+Each subject is a **module** you switch on in one YAML file. Weather, habits and
+work need no account at all; the rest connect to services you already run or use.
+
+| Module | Area | Needs |
+|---|---|---|
+| `open_meteo` | Weather | nothing: your coordinates |
+| `habits` | Habits | nothing |
+| `work` | Work | nothing: you enter your weekly shifts |
+| `securo` | Money | a self-hosted Securo |
+| `audiobookshelf` | Listening | a self-hosted Audiobookshelf + API key |
+| `canvas` | School | a Canvas calendar-feed URL |
+| `google_health` | Health | a Google Cloud OAuth client (Fitbit / Pixel Watch) |
 
 ## Run it
 
 ```bash
-cd atlas
-cp .env.example .env && chmod 600 .env    # already done if .env exists
+git clone https://github.com/Fazorath/atlas-dashboard.git atlas && cd atlas
+cp .env.example .env && chmod 600 .env     # secrets: DB password, tokens
+cp -r config.example config                # everything else
+$EDITOR config/atlas.yaml                  # your name, timezone, modules
+$EDITOR config/modules/open_meteo.yaml     # your coordinates
 docker compose up -d --build
-curl -s 127.0.0.1:8187/api/health
 ```
 
-Ingress (once only):
+Then open <http://127.0.0.1:8188>. Weather fills in at the next :07, or now with
+`curl -X POST 127.0.0.1:8187/api/sync/weather`.
 
-```bash
-tailscale serve --bg --https=8446 http://127.0.0.1:8188
+### Configuration
+
+```
+.env                         secrets only: DB password, logins, tokens, feed URLs
+config/atlas.yaml            name (the greeting), timezone, which modules are on
+config/modules/<module>.yaml that module's settings; each file explains itself
 ```
 
-Then: <https://your-tailnet-host.ts.net:8446>
+Remove a module from `atlas.yaml` and its screen, widgets and sync disappear;
+nothing it stored is deleted, so adding it back brings the history with it.
+After any change: `docker compose restart atlas-api`, then reload the page.
+
+With no `config/atlas.yaml` at all, every module is on and each one without
+settings says "needs setup".
+
+### Reaching your other apps
+
+Securo and Audiobookshelf are reached by container name, so `atlas-api` has to
+join their docker networks. Copy `docker-compose.override.example.yml` to
+`docker-compose.override.yml` (compose loads it automatically) and name the
+networks there; `docker network ls` lists them.
+
+### Getting to it
+
+Ports bind to `127.0.0.1` (`BIND_ADDRESS`, `WEB_PORT` in `.env`). **Atlas has no
+login yet**, so put it behind something that does the gatekeeping: Tailscale
+(`tailscale serve --bg --https=443 http://127.0.0.1:8188`), or a reverse proxy
+with auth. Don't publish it to the open internet as is.
 
 ## Shape
 
@@ -34,12 +70,12 @@ Then: <https://your-tailnet-host.ts.net:8446>
 | `atlas-web` | `127.0.0.1:8188` | nginx serving the built SPA, proxies `/api` to `atlas-api` |
 | `atlas-cron` | — | busybox crond, curls `POST /api/sync/<source>` on a schedule |
 
-Every service is `atlas-`-prefixed because this stack joins `securo_default` and
-`nas_default` as external networks, and securo already owns the container names
-`backend`, `db` and `redis` there.
+Every service is `atlas-`-prefixed so it can join other stacks' networks without
+colliding with their `db`, `redis` or `backend`.
 
-No app-level auth: Tailscale is the boundary, same as homarr and glances. Nothing
-binds beyond `127.0.0.1`.
+`GET /api/config` is what the dashboard reads first: the name and the modules
+that are on. `backend/app/modules.py` maps each module to its Area and sync
+source; a switched-off source answers cron with `204`.
 
 ## Adding a source
 
@@ -113,19 +149,20 @@ forecast in the local zone into `weather_daily` (7-day strip, sunrise/sunset,
 peak UV), and Open-Meteo's air-quality host for hourly US AQI. A failed AQI call
 is logged and skipped without touching the AQI already archived.
 
-Set your home coordinates in `.env`. The two lines in `.env` are the whole setup;
-changing location is editing them and restarting:
+`config/modules/open_meteo.yaml` is the whole setup; changing location is
+editing it and restarting:
 
 ```bash
-WEATHER_LAT=40.7128
-WEATHER_LON=-74.0060
+# config/modules/open_meteo.yaml
+latitude: 40.7128
+longitude: -74.0060
+units: fahrenheit        # or celsius
 
-docker compose up -d atlas-api
+docker compose restart atlas-api
 curl -X POST 127.0.0.1:8187/api/sync/weather
 ```
 
-Temperatures are stored metric and formatted for display in
-`frontend/src/lib/weather.ts` (`DISPLAY_UNIT`).
+Temperatures are stored metric; `units` only changes how they are shown.
 
 Open-Meteo's free tier sometimes answers **`503 The service is overloaded`**,
 mostly at the top of the hour when every cron job on the internet fires. So the
@@ -138,15 +175,17 @@ Securo, **live-proxied**. Nothing financial is written to Atlas's database and
 there is no migration for this phase: money already has a source of truth two
 containers away, and a second copy that drifts is worse than no copy.
 
-Reached at `http://backend:8000` over `securo_default`. The browser never calls
+Reached at `base_url` in `config/modules/securo.yaml` (`http://backend:8000`
+once `atlas-api` joins Securo's network). The browser never calls
 Securo — its CORS policy allows only its own frontend origin, and going through
 `atlas-api` keeps the credentials out of the bundle.
 
 ```bash
+# .env
 SECURO_EMAIL=you@example.com
 SECURO_PASSWORD=...
-# optional; blank uses the account's oldest workspace, as Securo's own UI does
-SECURO_WORKSPACE_ID=
+# config/modules/securo.yaml: base_url, public_url, and optionally workspace_id
+# (blank uses the account's oldest workspace, as Securo's own UI does)
 
 docker compose up -d atlas-api
 curl -s 127.0.0.1:8187/api/finance/ | python3 -m json.tool
@@ -161,7 +200,7 @@ transactions) and `/goals`.
 Securo's no-category bucket arrives named in the server's language ("Sem
 categoria"); Atlas identifies it by its null `category_id` and calls it
 **Uncategorised**. "Where it went" never draws it as a bar — it is a nudge line
-linking to `SECURO_PUBLIC_URL` (blank renders no link).
+linking to securo.yaml's `public_url` (blank renders no link).
 
 Things worth knowing before touching it:
 
@@ -205,16 +244,19 @@ Nothing in this phase issues a write to ABS. No progress write means no way for
 a dashboard bug to lose your place, which is the one piece of state here that
 cannot be re-derived from anything else.
 
-Reached at `http://audiobookshelf:80` over `nas_default`. Auth is a static API
+Reached at `base_url` in `config/modules/audiobookshelf.yaml`
+(`http://audiobookshelf:80` once `atlas-api` joins ABS's network). Auth is a static API
 key with no expiry and no refresh, so unlike Securo there is no login, no token
 cache and no lock:
 
 ```
 # .env — mint in ABS under Settings -> API Keys
-ABS_BASE_URL=http://audiobookshelf:80
 ABS_TOKEN=...
+
+# config/modules/audiobookshelf.yaml
+base_url: http://audiobookshelf:80
 # where the *browser* reaches ABS, for the "open in Audiobookshelf" link
-ABS_PUBLIC_URL=http://your-tailnet-host.ts.net:13378
+public_url: http://your-host:13378
 ```
 
 ```
@@ -243,12 +285,11 @@ POST /api/sync/listening        # reachability probe; writes nothing
   you are eight hours into on a card whose whole job is a listening position.
 - **The cover has to be proxied.** ABS wants the API key on the cover request,
   and an `<img src>` pointing at ABS could only carry that key by publishing it
-  to anything on the tailnet with a view of the page. `atlas-api` fetches it and
+  to anyone with a view of the page. `atlas-api` fetches it and
   re-serves it same-origin with an hour of browser cache.
-- **`ABS_PUBLIC_URL` is not `ABS_BASE_URL`.** The first is where your browser
+- **`public_url` is not `base_url`.** The first is where your browser
   reaches ABS, the second is a docker network name that means nothing to a
-  laptop. Blank renders no deep link rather than a broken one — ABS is published
-  straight on the tailnet IP at `:13378` and is not behind `tailscale serve`.
+  laptop. Blank renders no deep link rather than a broken one.
 - **A dead upstream is a 502, not an empty 200** — same rule as money, and for
   the same reason: no archive behind it means no last-good reading to show. A
   rejected API key is translated into a 502 that names `ABS_TOKEN`, because ABS
@@ -323,17 +364,17 @@ GET  /api/school/past?days=30   # the archive the feed itself forgets
 POST /api/school/{uid}/toggle   # flip your done tick
 ```
 
-- **Course labels** are `CANVAS_COURSE_LABELS` in `.env`: `fragment=Label` pairs
-  split by `;`, matched case-insensitively anywhere in Canvas's course name,
-  first match wins (so `Calculus I` would also catch a later `…II` — put
-  the longer fragment first). Applied on read; the
+- **Course labels** are `course_labels` in `config/modules/canvas.yaml`:
+  `fragment: Label` pairs, matched case-insensitively anywhere in Canvas's
+  course name, first match wins (so `Calculus I` would also catch a later
+  `…Calculus II` — put the longer fragment first). Applied on read; the
   table keeps Canvas's full name, and the UI shows it as a tooltip.
 - The **Last 30 days** list never shows "late": an unticked old row is most
   likely handed in. Lateness is the Overdue card's job.
 - **Registered as `school`**, the front end's key — not `canvas`, which is what
   the phase-1 crontab stub said.
 - `event-assignment-*` UIDs are Assignments. `event-calendar-event-*` are
-  **Class sessions** (the weekly live online classes), archived to
+  **Class sessions** (scheduled live class meetings), archived to
   `class_sessions` with the meeting link pulled from the description; the API
   returns `next_class` and `classes`. Never ticked, never counted in "Due this
   week"; Today's Due card mentions one only on the day it happens.
@@ -389,7 +430,7 @@ POST /api/sleep/disconnect       # revoke + forget the token; nights are kept
    `googlehealth.sleep.readonly`, `googlehealth.activity_and_fitness.readonly`,
    `googlehealth.health_metrics_and_measurements.readonly`.
 5. **Clients** → Create → *Web application*, authorised redirect URI
-   `https://your-tailnet-host.ts.net:8446/api/sleep/oauth/callback`.
+   `https://<where you open Atlas>/api/sleep/oauth/callback`.
    **Copy the secret now** — Google shows it once.
 6. Into `.env`, then `docker compose up -d atlas-api` and press **Connect
    Fitbit** on the Status screen:
@@ -397,14 +438,15 @@ POST /api/sleep/disconnect       # revoke + forget the token; nights are kept
 ```
 GOOGLE_OAUTH_CLIENT_ID=...apps.googleusercontent.com
 GOOGLE_OAUTH_CLIENT_SECRET=...
-GOOGLE_OAUTH_REDIRECT_URI=https://your-tailnet-host.ts.net:8446/api/sleep/oauth/callback
+# and in config/modules/google_health.yaml:
+# redirect_uri: https://<where you open Atlas>/api/sleep/oauth/callback
 ```
 
-Google accepts the `ts.net` redirect — confirmed 2026-09-22. Register it on the
+Google accepts a Tailscale `ts.net` HTTPS redirect. Register it on the
 client under **Authorized redirect URIs**; until you do, every sign-in fails
 with `redirect_uri_mismatch`, which is the same error a wrong port gives. If it
 is ever refused, register `http://localhost:8080/oauth/callback` instead and set that
-as `GOOGLE_OAUTH_REDIRECT_URI`. The Status screen then opens Google in a new tab
+as `redirect_uri`. The Status screen then opens Google in a new tab
 and asks you to paste the address it lands on. No code change either way.
 
 ### Things worth knowing
@@ -451,6 +493,5 @@ and asks you to paste the address it lands on. No code change either way.
 ## Phases
 
 Built: **1** (scaffolding), **2** (weather), **3** (Securo), **4**
-(Audiobookshelf), **5** (habits), **6** (Canvas), **7** (Fitbit — live
-2026-09-22; Google accepted the `ts.net` redirect URI, first sync archived 73
-nights and 90 days of activity).
+(Audiobookshelf), **5** (habits), **6** (Canvas), **7** (Fitbit / Pixel Watch via
+the Google Health API).

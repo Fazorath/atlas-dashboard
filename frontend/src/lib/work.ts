@@ -93,7 +93,7 @@ export function addDays(iso: string, n: number): string {
   return localDate(d);
 }
 
-/** The Monday on or before `iso`: the paper schedule runs Monday to Sunday. */
+/** The Monday on or before `iso`: a week runs Monday to Sunday. */
 export function mondayOf(iso: string = localDate()): string {
   const d = parseLocalDate(iso);
   return addDays(iso, -((d.getDay() + 6) % 7));

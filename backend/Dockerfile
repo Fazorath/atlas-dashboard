@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir \
       "asyncpg>=0.30" \
       "alembic>=1.14" \
       "httpx>=0.28" \
-      "icalendar>=6.0"
+      "icalendar>=6.0" \
+      "pyyaml>=6.0"
 
 COPY alembic.ini ./
 COPY alembic ./alembic

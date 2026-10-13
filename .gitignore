@@ -21,3 +21,7 @@ npm-debug.log*
 .DS_Store
 .idea/
 .vscode/
+
+# local setup — copied from the *.example versions
+/config/
+docker-compose.override.yml

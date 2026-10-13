@@ -2,7 +2,7 @@
    reading over a 20-segment meter that fills as the shift goes by.
 
    No Source and so no Freshness: you are the upstream, entering each week
-   from the paper schedule. A week nobody saved says so ("not entered") and a
+   by hand. A week nobody saved says so ("not entered") and a
    tap opens its Edit week sheet; an empty day in a saved week is a day off. */
 
 import { Link } from "react-router-dom";
@@ -35,7 +35,7 @@ import type { WidgetDef, WidgetProps } from "@/widgets/types";
 const PROBLEM = { chip: "Unavailable", text: "The Atlas API didn't answer." };
 const NOT_ENTERED = {
   title: "This week isn't entered",
-  text: "Tap to copy it in from the paper schedule.",
+  text: "Tap to enter this week's shifts.",
 };
 
 /** "WED · OCT 14" for the header. */

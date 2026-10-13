@@ -16,20 +16,20 @@ import { Board } from "@/components/board/Board";
 import { AccountMenu } from "@/components/layout/AccountMenu";
 import { Chip } from "@/components/ui/chip";
 import { ReconnectBanner } from "@/components/widgets/fitbit-connection";
+import { areaEnabled, ownerName } from "@/lib/config";
 import { problemsOf, useSources } from "@/lib/sources";
 import { useSleep } from "@/lib/sleep";
 
-const OWNER = "there";
-
 export function Today() {
+  const name = ownerName();
   return (
     <div className="flex flex-col gap-3 lap:gap-4">
-      <SleepBanner />
+      {areaEnabled("health") ? <SleepBanner /> : null}
       <Board
         board="today"
         leading={
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-            <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.02em] lap:text-[40px] lap:tracking-[-0.03em]">Hello, {OWNER}!</h1>
+            <h1 className="text-[30px] leading-none font-extrabold tracking-[-0.02em] lap:text-[40px] lap:tracking-[-0.03em]">{name ? `Hello, ${name}!` : "Hello!"}</h1>
             <ProblemChip />
           </div>
         }

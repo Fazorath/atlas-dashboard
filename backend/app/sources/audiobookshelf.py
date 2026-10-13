@@ -12,7 +12,7 @@ No progress write means no way for a dashboard bug to corrupt where you are in
 a book, which is the one piece of state in this integration that cannot be
 re-derived from anything.
 
-Reached at `http://audiobookshelf:80` over `nas_default`. The browser never
+Reached at `http://audiobookshelf:80` over its compose network. The browser never
 calls ABS directly — covers come back through `/api/listening/cover/{id}` — so
 the API key stays server-side, out of the bundle.
 
@@ -376,7 +376,7 @@ async def fetch_cover(item_id: str, width: int = COVER_WIDTH) -> tuple[bytes, st
 
     The browser cannot fetch this itself: ABS wants the API key on the request,
     and putting the key in an `<img src>` would publish it to anything on the
-    tailnet with a view of the page. So atlas-api fetches it and re-serves it
+    network with a view of the page. So atlas-api fetches it and re-serves it
     same-origin, which is the same reason Securo is proxied.
     """
     async with _client() as client:

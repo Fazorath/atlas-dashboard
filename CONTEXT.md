@@ -7,7 +7,7 @@ A personal life dashboard: it gathers what you'd otherwise check in six apps (he
 ### Structure
 
 **Area**:
-A top-level subject of your life that Atlas has a screen for: Health, Money, School, Habits, Weather, Listening. Each has one accent colour.
+A top-level subject of your life that Atlas has a screen for: Health, Money, School, Habits, Weather, Listening. Each has one accent colour. An Area exists while at least one Module that feeds it is on, first-party or Custom.
 _Avoid_: Section (for this meaning), tab, category, page
 
 **Section**:
@@ -17,6 +17,18 @@ _Avoid_: Sub-area, panel
 **Source**:
 An upstream that feeds an Area (Google Health, Securo, Canvas, Audiobookshelf, Open-Meteo). An Area may have several Sources; Habits has none — you are its upstream.
 _Avoid_: Integration, provider, connector
+
+**Module**:
+One switchable unit of Atlas, named by its id in `config/atlas.yaml` (`open_meteo`, `securo`, `canvas`…): an Area plus the Source that feeds it, if any. Switching it off removes its Widgets and sync, and its Area too unless another Module still feeds it; never its stored data.
+_Avoid_: Plugin, app, integration
+
+**Custom module**:
+A Module you write yourself in one YAML file rather than one shipped with Atlas. It either brings a new Area of its own or adds its Widgets to an existing Area, as its author chooses. Its Widgets show content written into the file, or data Atlas pulls from a URL.
+_Avoid_: Custom widget, user widget, plugin
+
+**Owner**:
+The one person an install belongs to. Anyone who can open Atlas may look and rearrange Boards; only the Owner may add, change or remove a Custom module or enter its secrets.
+_Avoid_: Admin, user (until there are accounts)
 
 ### Health
 
@@ -116,12 +128,16 @@ _Avoid_: Detail widget, page section
 One focused view of one Area's data (e.g. Money's "Upcoming bills"). An Area offers several; each looks deliberate at every Size it supports.
 _Avoid_: Card, tile, module
 
+**Widget type**:
+One of the built-in ways a Custom module's Widget can be drawn: Stat, Stats, Meter, List, Links or Note. A Custom module chooses a type and fills it; it never brings its own drawing.
+_Avoid_: Template, component, renderer
+
 **Size**:
 One of S (1×1), M (2×1), L (2×2), XL (4×2). A bigger Size shows more information, never the same content stretched. On a phone XL stands tall (2×4) with the same information.
 _Avoid_: Small/medium/large in code, span, width
 
 **Greeting**:
-The "Hello, there!" line in Today's toolbar, beside Edit. Not a Widget: the
+The "Hello, Sam!" line in Today's toolbar (the name is `name` in `config/atlas.yaml`), beside Edit. Not a Widget: the
 Greeting Widget (date, greeting and the day's rings) was retired 2026-10-12,
 so every Widget now belongs to an Area.
 _Avoid_: Hero, header, welcome card

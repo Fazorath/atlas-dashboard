@@ -23,7 +23,9 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/weather", tags=["weather"])
 
-NOT_CONFIGURED = "Add WEATHER_LAT and WEATHER_LON to .env, then restart atlas-api."
+NOT_CONFIGURED = (
+    "Add latitude and longitude to config/modules/open_meteo.yaml, then restart atlas-api."
+)
 NO_DATA = "No readings archived yet — run POST /api/sync/weather."
 
 # How many hours the card's strip may ask for.

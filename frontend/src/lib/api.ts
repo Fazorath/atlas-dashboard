@@ -1,5 +1,5 @@
 /** Everything is same-origin: nginx proxies /api to atlas-api. No auth header —
- *  Tailscale is the boundary. */
+ *  whatever fronts Atlas is the boundary. */
 
 export class ApiError extends Error {
   constructor(

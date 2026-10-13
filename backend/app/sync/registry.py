@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.measured import apply_measured
+from app.modules import source_enabled
 from app.sources.audiobookshelf import check_audiobookshelf
 from app.sources.canvas import sync_canvas
 from app.sources.google_health import sync_google_health
@@ -39,6 +40,10 @@ class Source:
 
 SOURCES: dict[str, Source] = {}
 
+#: Sources whose module is switched off in atlas.yaml. Cron still calls them on
+#: its fixed schedule; the sync endpoint answers 204 rather than 404 for these.
+DISABLED: set[str] = set()
+
 
 def register(
     name: str,
@@ -48,6 +53,9 @@ def register(
     live: bool = False,
     hidden: bool = False,
 ) -> None:
+    if not source_enabled(name):
+        DISABLED.add(name)
+        return
     SOURCES[name] = Source(
         name=name,
         run=run,

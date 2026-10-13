@@ -1,0 +1,17 @@
+# Health — sleep and activity via the Google Health API (Fitbit, Pixel Watch).
+# NOT dev.fitbit.com, which was turned down in September 2026.
+#
+# Google Cloud console: enable "Google Health API", create a Web application
+# OAuth client (Audience: External + Testing, yourself as a test user) with the
+# three googlehealth.*.readonly scopes: sleep, activity_and_fitness,
+# health_metrics_and_measurements. Client id and secret go in .env:
+#   GOOGLE_OAUTH_CLIENT_ID=  GOOGLE_OAUTH_CLIENT_SECRET=
+# Then open Status in Atlas and press Connect.
+#
+# Testing-mode sign-ins expire after 7 days; Today shows a Reconnect banner.
+
+# Must match the client's authorised redirect URI exactly, port included: the
+# address you open Atlas at, plus /api/sleep/oauth/callback. If Google won't
+# take it, register http://localhost:8080/oauth/callback and Atlas will ask
+# you to paste back the address the browser lands on.
+redirect_uri: https://atlas.example.com/api/sleep/oauth/callback

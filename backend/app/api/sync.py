@@ -3,14 +3,14 @@
     curl -X POST 127.0.0.1:8187/api/sync/weather
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models import SyncRun
 from app.schemas.sync import SourceStatus, SyncResult
-from app.sync import SOURCES, run_sync
+from app.sync import DISABLED, SOURCES, run_sync
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -55,7 +55,12 @@ async def sync_runs(
 
 
 @router.post("/{source}", response_model=SyncResult)
-async def trigger_sync(source: str, session: AsyncSession = Depends(get_session)) -> SyncResult:
+async def trigger_sync(
+    source: str, session: AsyncSession = Depends(get_session)
+) -> SyncResult | Response:
+    # Switched off in atlas.yaml: nothing to do, and not worth a cron error.
+    if source in DISABLED:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     if source not in SOURCES:
         raise HTTPException(
             status_code=404,

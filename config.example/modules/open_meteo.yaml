@@ -1,0 +1,7 @@
+# Weather — Open-Meteo, free, no API key.
+# Your home coordinates (decimal degrees). Find them by right-clicking a map.
+latitude: 40.7128
+longitude: -74.0060
+
+# How temperatures are shown: fahrenheit or celsius.
+units: fahrenheit

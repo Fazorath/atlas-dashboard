@@ -1,0 +1,14 @@
+# Money — a live view of a self-hosted Securo personal-finance server.
+# Nothing financial is stored in Atlas. Login goes in .env:
+#   SECURO_EMAIL=  SECURO_PASSWORD=
+# The account must not have 2FA on — Securo then never hands out a token.
+
+# Where atlas-api reaches Securo's backend. `backend:8000` works when Atlas
+# joins Securo's docker network (see docker-compose.override.example.yml).
+base_url: http://backend:8000
+
+# Where *your browser* reaches Securo, for the "open Securo" link. Optional.
+public_url: ""
+
+# Optional: pin one workspace. Blank uses the account's oldest, like Securo does.
+workspace_id: ""

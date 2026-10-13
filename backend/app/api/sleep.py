@@ -13,8 +13,8 @@ The one thing this router does that no other does is run an OAuth flow:
                                         when the redirect URI is a localhost one
     POST /api/sleep/disconnect       revoke, forget the token, keep the nights
 
-Tailscale is the only boundary, as everywhere in Atlas: anyone on the tailnet
-who can open the dashboard can also press Connect.
+There is no login yet, as everywhere in Atlas: anyone who can open the
+dashboard can also press Connect.
 """
 
 import logging
@@ -48,8 +48,9 @@ router = APIRouter(prefix="/sleep", tags=["sleep"])
 
 SOURCE = "sleep"
 NOT_CONFIGURED = (
-    "Create a Google Cloud OAuth client for the Google Health API and put its id, "
-    "secret and redirect URI in .env, then restart atlas-api."
+    "Create a Google Cloud OAuth client for the Google Health API, put its id and "
+    "secret in .env and its redirect URI in config/modules/google_health.yaml, then "
+    "restart atlas-api."
 )
 NOT_CONNECTED = "Connect your Fitbit's Google account to start archiving sleep."
 NO_DATA = "Connected — no nights archived yet. The first sync pulls 90 days."
@@ -237,7 +238,7 @@ async def oauth_callback(
     error: str = "",
     session: AsyncSession = Depends(get_session),
 ) -> RedirectResponse:
-    """Google's redirect lands here, through nginx and `tailscale serve`. Always
+    """Google's redirect lands here, through nginx and whatever fronts it. Always
     answers with a redirect back to the Status screen, carrying the outcome."""
     if error:
         message = "Google sign-in was cancelled" if error == "access_denied" else f"Google answered {error}"

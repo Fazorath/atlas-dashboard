@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { AREAS, type AreaKey } from "@/lib/sections";
+import { enabledAreas } from "@/lib/sections";
 import { cn } from "@/lib/utils";
 import { boardTitle, widgetsFor } from "@/widgets/registry";
 import type { BoardKey, Size, TileSpec, WidgetDef } from "@/widgets/types";
@@ -64,9 +64,9 @@ export function WidgetGallery({
 
   // Group by Area in nav order.
   const groups: { key: string; label: string; accent?: string; defs: WidgetDef[] }[] = [];
-  for (const area of Object.keys(AREAS) as AreaKey[]) {
-    const own = defs.filter((d) => d.area === area);
-    if (own.length) groups.push({ key: area, label: AREAS[area].label, accent: AREAS[area].accent, defs: own });
+  for (const area of enabledAreas()) {
+    const own = defs.filter((d) => d.area === area.key);
+    if (own.length) groups.push({ key: area.key, label: area.label, accent: area.accent, defs: own });
   }
 
   return (

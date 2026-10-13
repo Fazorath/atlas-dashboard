@@ -10,8 +10,8 @@ kept in `assignment_status`, which this module never touches.
 What a Canvas feed looks like, as far as this module relies on it:
 
 - Every assignment is a VEVENT whose UID starts `event-assignment-`.
-- Calendar events are `event-calendar-event-`. For this student they are the
-  weekly live online classes — **Class sessions**: a time you join, with the
+- Calendar events are `event-calendar-event-`. Where a course has scheduled
+  live meetings, these are them — **Class sessions**: a time you join, with the
   meeting link in the description. They are archived to `class_sessions`, and
   are never ticked and never counted toward "Due this week".
 - SUMMARY is `Title [Course Name]`. The last bracketed suffix is the course.

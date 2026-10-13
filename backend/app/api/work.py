@@ -1,4 +1,4 @@
-"""Work — weekly shifts, typed in from the paper schedule.
+"""Work — weekly shifts, typed in by hand.
 
 No sync and no registry entry, like habits: you are the upstream. The Edit
 week sheet saves a whole week at once (PUT replaces it), and DELETE turns a
