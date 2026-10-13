@@ -5,18 +5,19 @@ would otherwise check in six apps (weather, money, school, sleep, habits,
 listening, work shifts) into one page of widgets you arrange yourself, and keeps
 its own archive of whatever it can.
 
-Each subject is a **module** you switch on in one YAML file. Weather, habits and
-work need no account at all; the rest connect to services you already run or use.
+Each subject is a **module** you switch on in one YAML file. A fresh install
+starts with just Weather and Habits, which need no account; switch on the rest
+as you connect the services you already run or use.
 
-| Module | Area | Needs |
-|---|---|---|
-| `open_meteo` | Weather | nothing: your coordinates |
-| `habits` | Habits | nothing |
-| `work` | Work | nothing: you enter your weekly shifts |
-| `securo` | Money | a self-hosted Securo |
-| `audiobookshelf` | Listening | a self-hosted Audiobookshelf + API key |
-| `canvas` | School | a Canvas calendar-feed URL |
-| `google_health` | Health | a Google Cloud OAuth client (Fitbit / Pixel Watch) |
+| Module | Area | Needs | Example config |
+|---|---|---|---|
+| `open_meteo` | Weather | nothing: your coordinates | on |
+| `habits` | Habits | nothing | on |
+| `work` | Work | nothing: you enter your weekly shifts | off |
+| `securo` | Money | a self-hosted Securo | off |
+| `audiobookshelf` | Listening | a self-hosted Audiobookshelf + API key | off |
+| `canvas` | School | a Canvas calendar-feed URL | off |
+| `google_health` | Health | a Google Cloud OAuth client (Fitbit / Pixel Watch) | off |
 
 ## Run it
 
@@ -24,7 +25,7 @@ work need no account at all; the rest connect to services you already run or use
 git clone https://github.com/Fazorath/atlas-dashboard.git atlas && cd atlas
 cp .env.example .env && chmod 600 .env     # secrets: DB password, tokens
 cp -r config.example config                # everything else
-$EDITOR config/atlas.yaml                  # your name, timezone, modules
+$EDITOR config/atlas.yaml                  # your name, timezone, modules to add
 $EDITOR config/modules/open_meteo.yaml     # your coordinates
 docker compose up -d --build
 ```
@@ -46,6 +47,11 @@ After any change: `docker compose restart atlas-api`, then reload the page.
 
 With no `config/atlas.yaml` at all, every module is on and each one without
 settings says "needs setup".
+
+### On your phone
+
+Open Atlas in Safari or Chrome and use **Add to Home Screen**: it gets the Atlas
+icon and opens like an app, without the browser bars.
 
 ### Reaching your other apps
 
