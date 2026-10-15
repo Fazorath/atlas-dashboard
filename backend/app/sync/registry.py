@@ -45,6 +45,15 @@ SOURCES: dict[str, Source] = {}
 DISABLED: set[str] = set()
 
 
+#: Demo mode: these sources' rows come from `python -m app.demo`, so their sync
+#: reaches no upstream and rewrites nothing — it only keeps Freshness current.
+DEMO_SEEDED = {"school", "sleep"}
+
+
+async def _demo_hold(session: AsyncSession) -> int:
+    return 0
+
+
 def register(
     name: str,
     run: SyncFn,
@@ -56,6 +65,8 @@ def register(
     if not source_enabled(name):
         DISABLED.add(name)
         return
+    if settings.demo and name in DEMO_SEEDED:
+        run = _demo_hold
     SOURCES[name] = Source(
         name=name,
         run=run,

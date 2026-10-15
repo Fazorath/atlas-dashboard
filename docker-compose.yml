@@ -13,7 +13,7 @@
 #
 # No fixed project or container names: the project is the folder's name, so
 # two copies in two folders (say, a test install beside your real one) get
-# their own containers and their own database volume.
+# their own containers, images and database volume.
 #
 # Ports bind to 127.0.0.1 by default — put a reverse proxy or `tailscale serve`
 # in front. Atlas has no login of its own yet, so don't publish it openly.
@@ -37,7 +37,6 @@ services:
   atlas-api:
     build:
       context: ./backend
-    image: atlas-api:local
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-atlas}:${POSTGRES_PASSWORD}@atlas-db:5432/${POSTGRES_DB:-atlas}
@@ -71,7 +70,6 @@ services:
   atlas-web:
     build:
       context: ./frontend
-    image: atlas-web:local
     depends_on:
       - atlas-api
     ports:
@@ -88,7 +86,6 @@ services:
   atlas-cron:
     build:
       context: ./cron
-    image: atlas-cron:local
     environment:
       ATLAS_API: http://atlas-api:8000
       TZ: ${TZ:-America/New_York}

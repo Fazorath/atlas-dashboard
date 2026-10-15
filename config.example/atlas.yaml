@@ -22,3 +22,9 @@ modules:
   # - audiobookshelf # What you're listening to, from Audiobookshelf.
   # - canvas         # Assignments and classes, from a Canvas calendar feed.
   # - google_health  # Sleep and activity from Fitbit / Pixel Watch.
+
+# Demo data: set `demo: true`, turn on work, canvas and google_health above,
+# then run `docker compose exec atlas-api python -m app.demo` to fill an empty
+# install with a made-up student's week. Canvas and Google Health then need no
+# account and their syncs touch nothing. Never on a real install.
+# demo: true

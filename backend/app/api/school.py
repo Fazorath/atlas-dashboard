@@ -22,7 +22,7 @@ router = APIRouter(prefix="/school", tags=["school"])
 
 NOT_CONFIGURED = (
     "Copy your feed link from Canvas (Calendar, then Calendar Feed) into "
-    ".env as CANVAS_ICS_URL, then restart atlas-api."
+    ".env as CANVAS_ICS_URL, then run docker compose up -d atlas-api."
 )
 NO_DATA = "No assignments archived yet — run POST /api/sync/school."
 

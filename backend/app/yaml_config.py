@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 CONFIG_DIR = Path(os.environ.get("ATLAS_CONFIG_DIR", "/config"))
 
-ATLAS_KEYS = {"name": "owner_name", "timezone": "tz", "modules": "modules"}
+ATLAS_KEYS = {"name": "owner_name", "timezone": "tz", "modules": "modules", "demo": "demo"}
 
 #: Per module file: YAML key -> Settings field. A module with no entry here
 #: has nothing to set and needs no file.

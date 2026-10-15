@@ -24,6 +24,7 @@ as you connect the services you already run or use.
 ```bash
 git clone https://github.com/Fazorath/atlas-dashboard.git atlas && cd atlas
 cp .env.example .env && chmod 600 .env     # secrets: DB password, tokens
+$EDITOR .env                               # set POSTGRES_PASSWORD (not change-me)
 cp -r config.example config                # everything else
 $EDITOR config/atlas.yaml                  # your name, timezone, modules to add
 $EDITOR config/modules/open_meteo.yaml     # your coordinates
@@ -43,10 +44,30 @@ config/modules/<module>.yaml that module's settings; each file explains itself
 
 Remove a module from `atlas.yaml` and its screen, widgets and sync disappear;
 nothing it stored is deleted, so adding it back brings the history with it.
-After any change: `docker compose restart atlas-api`, then reload the page.
+After changing `config/`: `docker compose restart atlas-api`. After changing `.env`:
+`docker compose up -d atlas-api` (a restart keeps the old environment). Then reload the page.
 
 With no `config/atlas.yaml` at all, every module is on and each one without
 settings says "needs setup".
+
+### Demo data
+
+To look around before connecting anything, fill an empty install with a
+made-up student's week: habits with streaks, five weeks of sleep and activity,
+assignments and class sessions, and work shifts.
+
+```bash
+# config/atlas.yaml: add `demo: true`, and turn on work, canvas, google_health
+docker compose restart atlas-api
+docker compose exec atlas-api python -m app.demo
+curl -X POST 127.0.0.1:8187/api/sync/weather       # weather stays real
+```
+
+`demo: true` makes Canvas and Google Health count as set up without an account,
+and stops their syncs from touching the seeded rows. The script only runs in
+demo mode and only on empty tables (`--force` deletes those tables and reseeds),
+so it can't land on top of real data. Remove `demo: true` before connecting
+real accounts.
 
 ### On your phone
 
@@ -324,7 +345,7 @@ DELETE /api/habits/{id}             # hard delete, ticks included — archive is
 
 - **Days are local** (`settings.tz`, via `app/clock.py`, which weather now shares).
   In the browser, build dates with `localDate()` from `lib/habits.ts`, never
-  `toISOString()` — that is the UTC date and flips to tomorrow at 8pm here.
+  `toISOString()` — that is the UTC date and flips to tomorrow in the evening anywhere west of UTC.
 - **Streaks are computed, never stored** — gaps-and-islands over `habit_entries`
   on every read, so a backfilled tick repairs every figure. The current streak
   counts through yesterday until today is over; streak figures always answer for
@@ -380,7 +401,7 @@ POST /api/school/{uid}/toggle   # flip your done tick
 - **Registered as `school`**, the front end's key — not `canvas`, which is what
   the phase-1 crontab stub said.
 - `event-assignment-*` UIDs are Assignments. `event-calendar-event-*` are
-  **Class sessions** (scheduled live class meetings), archived to
+  **Class sessions** (calendar events, e.g. scheduled class meetings), archived to
   `class_sessions` with the meeting link pulled from the description; the API
   returns `next_class` and `classes`. Never ticked, never counted in "Due this
   week"; Today's Due card mentions one only on the day it happens.
@@ -448,7 +469,8 @@ GOOGLE_OAUTH_CLIENT_SECRET=...
 # redirect_uri: https://<where you open Atlas>/api/sleep/oauth/callback
 ```
 
-Google accepts a Tailscale `ts.net` HTTPS redirect. Register it on the
+Google accepts an HTTPS redirect on your own hostname (a reverse proxy, or
+`tailscale serve`). Register it on the
 client under **Authorized redirect URIs**; until you do, every sign-in fails
 with `redirect_uri_mismatch`, which is the same error a wrong port gives. If it
 is ever refused, register `http://localhost:8080/oauth/callback` instead and set that
@@ -495,6 +517,19 @@ and asks you to paste the address it lands on. No code change either way.
   `mainSleep`), so a wrong assumption is a re-parse, not lost history.
 - Stage colours are one violet ramp (deep → awake), not four hues: stages are
   ordinal, and the hypnogram's rows carry the same order by position.
+
+## Early testers
+
+Atlas is being worked on in the open over the next few weeks, and early testers
+are welcome. Install it, try it with demo data or your own, and open an issue
+for anything that breaks or anything you wish it did.
+
+## What's next
+
+- **Custom modules**: add your own widgets from inside the app with a short
+  YAML file, from static links and notes to numbers pulled from any JSON API
+  you run.
+- A catalog of community modules to browse and install.
 
 ## Phases
 

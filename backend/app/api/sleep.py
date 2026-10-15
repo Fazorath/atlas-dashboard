@@ -50,7 +50,7 @@ SOURCE = "sleep"
 NOT_CONFIGURED = (
     "Create a Google Cloud OAuth client for the Google Health API, put its id and "
     "secret in .env and its redirect URI in config/modules/google_health.yaml, then "
-    "restart atlas-api."
+    "run docker compose up -d atlas-api."
 )
 NOT_CONNECTED = "Connect your Fitbit's Google account to start archiving sleep."
 NO_DATA = "Connected — no nights archived yet. The first sync pulls 90 days."
@@ -62,6 +62,8 @@ async def connection(session: AsyncSession) -> Connection:
     paste_back = google_health.paste_back()
     if not settings.google_health_configured:
         return Connection(state="setup")
+    if settings.demo:
+        return Connection(state="connected", paste_back=paste_back)
 
     token = await session.get(OAuthToken, google_health.PROVIDER)
     if token is None:

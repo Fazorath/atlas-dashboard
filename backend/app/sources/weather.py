@@ -18,7 +18,7 @@ Phase 2 is the cheapest integration in the build order and goes first.
 Three requests per sync, all archived:
 
 * hourly forecast, in UTC — the rows above, now with UV index;
-* daily forecast, in the *local* zone — a UTC "day" would end at 8pm here — for
+* daily forecast, in the *local* zone — a UTC "day" ends in the evening west of UTC — for
   the 7-day strip, sunrise and sunset, and the day's peak UV. Upserted on the
   date into `weather_daily`, so a day forecast a week out converges too;
 * air quality, a separate Open-Meteo host, for US AQI per hour. Optional: if it

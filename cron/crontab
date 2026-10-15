@@ -9,7 +9,7 @@
 
 # Phase 2 — weather, hourly. At :07, not :00 — the top of the hour is when
 # every cron job on the internet hits Open-Meteo's free tier at once, and a
-# :00 run met "503 The service is overloaded" on 2026-09-22.
+# :00 run can meet "503 The service is overloaded".
 7    *  *   *   *    /usr/local/bin/sync.sh weather
 
 # Phase 3 — Securo reachability. A live proxy writes nothing; this only keeps

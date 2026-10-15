@@ -1,12 +1,18 @@
 /* The Widget gallery: the sheet "+" opens in Edit mode, listing every Widget
    that can be placed on this Board, grouped by Area, each with a live
-   preview at the Size you pick. The seed of the marketplace catalog.
+   preview at the Size you pick. Every entry starts at its smallest Size —
+   opening on the largest made the gallery a wall of giant tiles — and the
+   Widget lands at whatever Size is picked. The seed of the marketplace catalog.
+
+   One tab per Area, as a single scrolling chip row (it overflows on a
+   phone). Today opens on the first Area with something left to add; an
+   Area Board only ever has its own tab.
 
    A preview is the real Widget on real data, laid out at the tile's true
    size on this device and scaled down to fit the sheet, so what you see is
    exactly what lands on the Board. */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
@@ -63,35 +69,96 @@ export function WidgetGallery({
   const defs = widgetsFor(board);
 
   // Group by Area in nav order.
-  const groups: { key: string; label: string; accent?: string; defs: WidgetDef[] }[] = [];
+  const groups: { key: string; label: string; accent?: string; defs: WidgetDef[]; addable: number }[] = [];
   for (const area of enabledAreas()) {
     const own = defs.filter((d) => d.area === area.key);
-    if (own.length) groups.push({ key: area.key, label: area.label, accent: area.accent, defs: own });
+    if (own.length) {
+      const addable = own.filter((d) => !placed.has(d.id)).length;
+      groups.push({ key: area.key, label: area.label, accent: area.accent, defs: own, addable });
+    }
   }
+
+  const [tab, setTab] = useState(
+    () => groups.find((g) => g.key === board)?.key ?? groups.find((g) => g.addable > 0)?.key ?? groups[0]?.key,
+  );
+  const current = groups.find((g) => g.key === tab) ?? groups[0];
 
   return (
     <Sheet eyebrow={`Add to ${boardTitle(board)}`} title="Widget gallery" onClose={onClose} className="max-w-[880px]">
-        <div className="flex flex-col gap-8 overflow-y-auto px-4 py-5 lap:px-6">
-          {groups.map((g) => (
-            <section key={g.key} data-accent={g.accent} className="flex flex-col gap-3">
-              <h3 className="label-caps flex items-center gap-2 text-fg-muted">
-                <span aria-hidden className="size-1.5 bg-accent" />
-                {g.label}
-              </h3>
-              <ul className="flex flex-col gap-4">
-                {g.defs.map((def) => (
-                  <Entry key={def.id} def={def} placed={placed.has(def.id)} onAdd={onAdd} />
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+        <AreaTabs groups={groups} tab={current?.key} onPick={setTab} />
+        {current ? (
+          <div
+            key={current.key}
+            role="tabpanel"
+            id={`gallery-panel-${current.key}`}
+            aria-labelledby={`gallery-tab-${current.key}`}
+            data-accent={current.accent}
+            className="overflow-y-auto px-4 py-5 lap:px-6"
+          >
+            <ul className="flex flex-col gap-4">
+              {current.defs.map((def) => (
+                <Entry key={def.id} def={def} placed={placed.has(def.id)} onAdd={onAdd} />
+              ))}
+            </ul>
+          </div>
+        ) : null}
     </Sheet>
   );
 }
 
+function AreaTabs({
+  groups,
+  tab,
+  onPick,
+}: {
+  groups: { key: string; label: string; accent?: string }[];
+  tab?: string;
+  onPick: (key: string) => void;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+
+  // Keep the selected chip in view when the row overflows.
+  useEffect(() => {
+    row.current
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tab]);
+
+  return (
+    <div
+      ref={row}
+      role="tablist"
+      aria-label="Areas"
+      className="flex shrink-0 gap-2 overflow-x-auto border-b border-border-subtle px-4 py-3 [scrollbar-width:none] lap:px-6"
+    >
+      {groups.map((g) => {
+        const on = g.key === tab;
+        return (
+          <button
+            key={g.key}
+            type="button"
+            role="tab"
+            id={`gallery-tab-${g.key}`}
+            aria-selected={on}
+            aria-controls={`gallery-panel-${g.key}`}
+            data-accent={g.accent}
+            onClick={() => onPick(g.key)}
+            className={cn(
+              "flex h-9 shrink-0 items-center gap-2 rounded-pill px-3.5 text-[13px] transition-colors",
+              on ? "bg-fg text-bg" : "bg-surface-2 text-fg-muted hover:text-fg",
+            )}
+          >
+            <span aria-hidden className="size-1.5 bg-accent" />
+            {g.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Entry({ def, placed, onAdd }: { def: WidgetDef; placed: boolean; onAdd: (tile: TileSpec) => void }) {
-  const [size, setSize] = useState<Size>(def.sizes[def.sizes.length - 1]);
+  const [size, setSize] = useState<Size>(def.sizes[0]);
   return (
     <li className="flex flex-col gap-3 rounded-card border border-border-subtle bg-surface p-3 lap:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -144,9 +211,12 @@ function Preview({ children }: { children: (wide: boolean) => { box: { w: number
   const outer = useRef<HTMLDivElement>(null);
   const [avail, setAvail] = useState(0);
 
-  useEffect(() => {
+  // Measure before the first paint: starting at 0 drew an empty frame on
+  // every tab switch, which read as the whole gallery flashing.
+  useLayoutEffect(() => {
     const el = outer.current;
     if (!el) return;
+    setAvail(el.clientWidth);
     const ro = new ResizeObserver(([entry]) => setAvail(entry.contentRect.width));
     ro.observe(el);
     return () => ro.disconnect();

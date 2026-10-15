@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # "Hello!") and the module ids that are on. None means no atlas.yaml: all.
     owner_name: str = ""
     modules: list[str] | None = None
+    # `demo: true` in atlas.yaml: Canvas and Google Health count as set up and
+    # their syncs touch nothing, so rows from `python -m app.demo` show as if a
+    # real account fed them. Never set on a real install.
+    demo: bool = False
 
     # Phase 2 — Open-Meteo, no API key.
     weather_lat: float | None = None
@@ -114,13 +118,13 @@ class Settings(BaseSettings):
 
     @property
     def canvas_configured(self) -> bool:
-        return bool(self.canvas_ics_url)
+        return bool(self.canvas_ics_url) or self.demo
 
     @property
     def google_health_configured(self) -> bool:
         """The OAuth client exists. Whether an account is *connected* through it
         is a row in `oauth_tokens`, not a setting — see app/sources/google_health."""
-        return bool(
+        return self.demo or bool(
             self.google_oauth_client_id
             and self.google_oauth_client_secret
             and self.google_oauth_redirect_uri

@@ -38,7 +38,7 @@ router = APIRouter(prefix="/listening", tags=["listening"])
 
 NOT_CONFIGURED = (
     "Mint an API key in Audiobookshelf under Settings, API Keys, put it in "
-    ".env as ABS_TOKEN, then restart atlas-api."
+    ".env as ABS_TOKEN, then run docker compose up -d atlas-api."
 )
 
 #: ABS ids are UUIDs. The id goes into an upstream URL path, so anything that is
