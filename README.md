@@ -524,6 +524,9 @@ Atlas is being worked on in the open over the next few weeks, and early testers
 are welcome. Install it, try it with demo data or your own, and open an issue
 for anything that breaks or anything you wish it did.
 
+Want to try it early? [Sign up as a tester](https://docs.google.com/forms/d/e/1FAIpQLSdxZBcTgOdY8poCUWc8kH8xmdDmS68RYQbLGJXGSs1on70KTw/viewform)
+and I'll email you when new releases land.
+
 ## What's next
 
 - **Custom modules**: add your own widgets from inside the app with a short
