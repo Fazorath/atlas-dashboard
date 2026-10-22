@@ -1,0 +1,22 @@
+# Copy to docker-compose.override.yml (compose loads it automatically) when
+# atlas-api has to reach apps in *other* compose stacks by container name —
+# e.g. Securo's `backend` or `audiobookshelf`. Join each stack's network here.
+# Find names with `docker network ls`; a stack's default is `<project>_default`.
+#
+# Not needed for weather, habits, work, Canvas or Google Health: those talk to
+# the internet, not to your other containers.
+
+services:
+  atlas-api:
+    networks:
+      - default
+      - securo
+      - audiobookshelf
+
+networks:
+  securo:
+    external: true
+    name: securo_default
+  audiobookshelf:
+    external: true
+    name: audiobookshelf_default

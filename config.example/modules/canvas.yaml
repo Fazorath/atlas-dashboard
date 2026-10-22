@@ -1,0 +1,11 @@
+# School — assignments and class sessions from Canvas's calendar feed.
+# Canvas -> Calendar -> Calendar Feed gives a URL that carries its own token,
+# so it is a secret and goes in .env:
+#   CANVAS_ICS_URL=
+
+# Optional short names for long course titles. Each key is matched anywhere in
+# Canvas's course name, ignoring case; the first match wins, so put longer
+# keys first. Unmatched courses keep their full name.
+course_labels:
+  CS101: Intro CS
+  Calculus II: Calc II

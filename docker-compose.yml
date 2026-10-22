@@ -1,0 +1,103 @@
+# Atlas — self-hosted personal life dashboard.
+#
+#   cp .env.example .env && cp -r config.example config   # then edit both
+#   docker compose up -d --build
+#
+# .env holds secrets; config/ holds everything else (who you are, which
+# modules are on, each module's settings).
+#
+# Every service is `atlas-`-prefixed on purpose: to reach apps in other compose
+# stacks (Securo, Audiobookshelf) atlas-api joins their networks, via
+# docker-compose.override.yml, and a bare `db` there would collide with theirs.
+# See docker-compose.override.example.yml.
+#
+# No fixed project or container names: the project is the folder's name, so
+# two copies in two folders (say, a test install beside your real one) get
+# their own containers, images and database volume.
+#
+# Ports bind to 127.0.0.1 by default — put a reverse proxy or `tailscale serve`
+# in front. Atlas has no login of its own yet, so don't publish it openly.
+services:
+  atlas-db:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-atlas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-atlas}
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atlas} -d ${POSTGRES_DB:-atlas}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  atlas-api:
+    build:
+      context: ./backend
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      # The api builds its DB URL from these, escaped (app/config.py), so the
+      # password may contain any character.
+      POSTGRES_USER: ${POSTGRES_USER:-atlas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-atlas}
+      TZ: ${TZ:-America/New_York}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ATLAS_CONFIG_DIR: /config
+      # Secrets only — every other setting lives in config/. Unset is fine:
+      # each module reports "needs setup" rather than failing.
+      SECURO_EMAIL: ${SECURO_EMAIL:-}
+      SECURO_PASSWORD: ${SECURO_PASSWORD:-}
+      ABS_TOKEN: ${ABS_TOKEN:-}
+      CANVAS_ICS_URL: ${CANVAS_ICS_URL:-}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      # Overridable so the Google flow can be pointed at a stub in tests.
+      GOOGLE_OAUTH_AUTH_URL: ${GOOGLE_OAUTH_AUTH_URL:-https://accounts.google.com/o/oauth2/v2/auth}
+      GOOGLE_OAUTH_TOKEN_URL: ${GOOGLE_OAUTH_TOKEN_URL:-https://oauth2.googleapis.com/token}
+      GOOGLE_OAUTH_REVOKE_URL: ${GOOGLE_OAUTH_REVOKE_URL:-https://oauth2.googleapis.com/revoke}
+      GOOGLE_HEALTH_BASE_URL: ${GOOGLE_HEALTH_BASE_URL:-https://health.googleapis.com}
+    volumes:
+      - ./config:/config:ro
+    depends_on:
+      atlas-db:
+        condition: service_healthy
+    ports:
+      # Loopback by default — reachable through atlas-web's /api proxy, and by hand
+      # for `curl -X POST 127.0.0.1:8187/api/sync/<source>` while developing.
+      - "${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8187}:8000"
+    restart: unless-stopped
+
+  atlas-web:
+    build:
+      context: ./frontend
+    depends_on:
+      - atlas-api
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8188}:8080"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  atlas-cron:
+    build:
+      context: ./cron
+    environment:
+      ATLAS_API: http://atlas-api:8000
+      TZ: ${TZ:-America/New_York}
+    depends_on:
+      - atlas-api
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  pgdata:

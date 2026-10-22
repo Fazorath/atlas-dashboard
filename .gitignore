@@ -1,0 +1,27 @@
+.env
+*.env.local
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# agent worktrees
+.claude/
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/
+
+# local setup — copied from the *.example versions
+/config/
+docker-compose.override.yml

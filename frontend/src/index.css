@@ -1,0 +1,392 @@
+@import "tailwindcss";
+
+/* Atlas's whole look lives here. Components never name a colour, a radius or a
+   font — they name a token, so retuning the app is editing this file.
+
+   The look is an instrument panel: near-black hairline-edged cards, small
+   uppercase labels, mono numerals and segmented meters. Two ideas do most of
+   the work:
+
+   1. Every area of the app owns one accent, and colour is spent only on data.
+      Cards are all the same neutral surface; the accent appears as the square
+      beside a card's title and on its meters, bars and chart marks, so colour
+      always means "this is a reading". Secondary copy stays grey.
+
+   2. The accent is inherited, not passed. A `data-accent` attribute rebinds
+      --accent and friends for its whole subtree, and the Tailwind aliases below
+      are declared `inline` so utilities compile to `var(--accent)` rather than a
+      baked hex. That means `text-accent` on a ring, a chip or a chart bar means
+      "whatever area I am inside", with no per-accent class maps. */
+
+:root {
+  /* Neutrals */
+  --bg: #050505; /* page background */
+  --surface: #0e0e0e; /* every card */
+  --surface-2: #1a1a1a; /* nested rows, tab bar, inactive chips, unlit meter segments */
+  --border-subtle: #232323; /* card hairline, tab bar outline */
+  --divider: #1f1f1f; /* row dividers inside cards */
+  --text: #ededed;
+  --text-muted: #8a8a8a; /* 5.6:1 on --surface */
+  --text-dim: #7d7d7d; /* future dates, disabled — 4.7:1 on --surface */
+
+  /* Accents: full colour / tint (chips, icon tiles) / track / secondary text.
+     Secondary text is grey in every area: the accent is kept for data, so
+     -soft is one neutral rather than four pastel tints. */
+  --sleep: #9b8cff;
+  --sleep-tint: #1e1b3a;
+  --sleep-track: #3a3470;
+  --sleep-soft: #8a8a8a;
+  /* Sleep stages are ordinal — Fitbit's own depth order — so they are one
+     violet ramp, not four hues, and Sleep keeps its single accent. Validated
+     as an ordinal ramp (monotone lightness, >=0.06 steps, darkest end 2.7:1)
+     on both --sleep-tint and --surface. The hypnogram's rows encode the same
+     order by position, so colour is never the only signal. */
+  --stage-deep: #5b47e0;
+  --stage-light: #8f7dff;
+  --stage-rem: #b9adff;
+  --stage-awake: #e6e1ff;
+
+  --habits: #3ddc97;
+  --habits-tint: #12291f;
+  --habits-track: #1d4632;
+  --habits-soft: #8a8a8a;
+
+  --due: #ff6b81;
+  --due-tint: #2f1920;
+  --due-track: #4a2530;
+  --due-soft: #8a8a8a;
+
+  --money: #ffb547;
+  --money-tint: #2e2414;
+  --money-track: #4a3a1e;
+  --money-soft: #8a8a8a;
+
+  --weather: #5cc8ff;
+  --weather-tint: #10263a;
+  --weather-track: #16324a;
+  --weather-soft: #8a8a8a;
+
+  /* Teal: clear of Habits' mint and Weather's sky on a dark tint. */
+  --work: #2dd4bf;
+  --work-tint: #0f2826;
+  --work-track: #17443f;
+  --work-soft: #8a8a8a;
+
+  /* Status chip text sits lighter than the accent so 13px copy clears 4.5:1
+     against the tint it is printed on. */
+  --live-text: #7fe8b8;
+  --setup-text: #ffcf85;
+  --idle-dot: #5a6378;
+  --check-outline: #343c50;
+
+  /* Spacing */
+  --gap-grid-desktop: 20px;
+  --gap-grid-phone: 12px;
+  --pad-card-desktop: 24px;
+  --pad-card-phone: 16px;
+  --page-pad-desktop: 28px 48px 40px;
+  --page-pad-phone: 28px 18px 0;
+  --touch-min: 44px;
+
+  /* Default accent: Today's violet doubles as the brand. */
+  --accent: var(--sleep);
+  --accent-tint: var(--sleep-tint);
+  --accent-track: var(--sleep-track);
+  --accent-soft: var(--sleep-soft);
+}
+
+[data-accent="sleep"] {
+  --accent: var(--sleep);
+  --accent-tint: var(--sleep-tint);
+  --accent-track: var(--sleep-track);
+  --accent-soft: var(--sleep-soft);
+}
+
+[data-accent="habits"] {
+  --accent: var(--habits);
+  --accent-tint: var(--habits-tint);
+  --accent-track: var(--habits-track);
+  --accent-soft: var(--habits-soft);
+}
+
+[data-accent="due"] {
+  --accent: var(--due);
+  --accent-tint: var(--due-tint);
+  --accent-track: var(--due-track);
+  --accent-soft: var(--due-soft);
+}
+
+[data-accent="money"] {
+  --accent: var(--money);
+  --accent-tint: var(--money-tint);
+  --accent-track: var(--money-track);
+  --accent-soft: var(--money-soft);
+}
+
+[data-accent="weather"] {
+  --accent: var(--weather);
+  --accent-tint: var(--weather-tint);
+  --accent-track: var(--weather-track);
+  --accent-soft: var(--weather-soft);
+}
+
+[data-accent="work"] {
+  --accent: var(--work);
+  --accent-tint: var(--work-tint);
+  --accent-track: var(--work-track);
+  --accent-soft: var(--work-soft);
+}
+
+/* Radius. Declared here rather than in :root so `rounded-card-lg` exists as a
+   utility and `var(--radius-card-lg)` still resolves in hand-written CSS. */
+@theme {
+  --radius-card-lg: 8px; /* desktop cards */
+  --radius-card: 8px; /* phone cards */
+  --radius-row: 6px; /* rows nested inside cards */
+  --radius-chip: 6px; /* icon squares, small tiles */
+  --radius-pill: 999px;
+
+  /* Space Grotesk tops out at 700 and reads heavy there; the panel look wants
+     headlines at 600 and labels a step under, so the two heaviest Tailwind
+     weights are pulled in rather than every component being re-weighted. */
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+
+  /* The two widths the spec turns on: `lap` is where the phone tab bar gives
+     way to the desktop pill nav, `desk` is where the grid opens to 4 columns. */
+  --breakpoint-lap: 900px;
+  --breakpoint-desk: 1180px;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border-subtle: var(--border-subtle);
+  --color-divider: var(--divider);
+
+  /* `fg` rather than `text` so the utility reads `text-fg-muted`. */
+  --color-fg: var(--text);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-dim: var(--text-dim);
+
+  --color-sleep: var(--sleep);
+  --color-sleep-tint: var(--sleep-tint);
+  --color-sleep-track: var(--sleep-track);
+  --color-sleep-soft: var(--sleep-soft);
+  --color-stage-deep: var(--stage-deep);
+  --color-stage-light: var(--stage-light);
+  --color-stage-rem: var(--stage-rem);
+  --color-stage-awake: var(--stage-awake);
+
+  --color-habits: var(--habits);
+  --color-habits-tint: var(--habits-tint);
+  --color-habits-track: var(--habits-track);
+  --color-habits-soft: var(--habits-soft);
+
+  --color-due: var(--due);
+  --color-due-tint: var(--due-tint);
+  --color-due-track: var(--due-track);
+  --color-due-soft: var(--due-soft);
+
+  --color-money: var(--money);
+  --color-money-tint: var(--money-tint);
+  --color-money-track: var(--money-track);
+  --color-money-soft: var(--money-soft);
+
+  --color-weather: var(--weather);
+  --color-weather-tint: var(--weather-tint);
+  --color-weather-track: var(--weather-track);
+  --color-weather-soft: var(--weather-soft);
+
+  --color-work: var(--work);
+  --color-work-tint: var(--work-tint);
+  --color-work-track: var(--work-track);
+  --color-work-soft: var(--work-soft);
+
+  /* Inherited from the nearest [data-accent]. */
+  --color-accent: var(--accent);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-track: var(--accent-track);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-live-text: var(--live-text);
+  --color-setup-text: var(--setup-text);
+  --color-idle-dot: var(--idle-dot);
+  --color-check-outline: var(--check-outline);
+
+  --font-sans: "Space Grotesk Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    background-color: var(--bg);
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Every reading is set in the mono face — values update in place, so digits
+     must not reflow the line, and the mono is most of the panel look. Its
+     weight is pinned at 500 through the variable axis: at the 600–800 the
+     surrounding headline classes ask for, mono numerals turn to slabs. */
+  .tnum {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-variation-settings: "wght" 500;
+  }
+
+  /* A card or reading's name: small, spaced, uppercase. */
+  .label-caps {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  @media (width >= 900px) {
+    .label-caps {
+      font-size: 12px;
+    }
+  }
+
+  /* Small uppercase structural label: dates, "LISTENING", section eyebrows.
+     Mono, like a readout's header line. */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* Focus always answers in the colour of the area you are in. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--accent-track);
+    color: var(--text);
+  }
+}
+
+@layer components {
+  /* Press feedback for anything tappable that is shaped like a card or row. */
+  .pressable {
+    transition:
+      transform 120ms ease-out,
+      filter 180ms ease-out;
+  }
+
+  .pressable:active {
+    transform: scale(0.98);
+  }
+
+  @media (hover: hover) {
+    .pressable:hover {
+      filter: brightness(1.08);
+    }
+  }
+
+  /* Rings and bars ease to their new value rather than snapping. */
+  .value-transition {
+    transition:
+      stroke-dasharray 400ms ease-out,
+      width 400ms ease-out;
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+
+  /* A Board's grid (ADR 0002). Columns are sized against the Board's own
+     width. On desktop a row is 0.71 of a column (276×196 at the widest), so a
+     Size is a fixed shape. On a phone a row hugs its content, with half a
+     column as the floor: a fixed square cell there spread a Widget's text
+     across a 171px-tall tile, so the phone trades the fixed shape for
+     density. A chart that fills its tile on desktop (`flex-1`) carries its own
+     `max-lap:min-h-*` for the phone. `dense` packs a gap left by a Widget that
+     stepped aside with whatever fits from below. */
+  .board {
+    container-type: inline-size;
+  }
+
+  .board-grid {
+    --cols: 2;
+    --gap: var(--gap-grid-phone);
+    --col: calc((100cqw - (var(--cols) - 1) * var(--gap)) / var(--cols));
+    display: grid;
+    gap: var(--gap);
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+    grid-auto-rows: minmax(calc(var(--col) * 0.5), auto);
+    grid-auto-flow: row dense;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  @media (width >= 900px) {
+    .board-grid {
+      --cols: 4;
+      --gap: var(--gap-grid-desktop);
+      grid-auto-rows: calc(var(--col) * 0.71);
+    }
+  }
+
+  /* Edit mode: every Widget trembles a little, half of them out of phase. */
+  .wiggle {
+    animation: wiggle 300ms ease-in-out infinite alternate;
+  }
+
+  .wiggle-b {
+    animation-delay: -150ms;
+  }
+}
+
+@keyframes wiggle {
+  from {
+    transform: rotate(-0.45deg);
+  }
+  to {
+    transform: rotate(0.45deg);
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .pressable:active {
+    transform: none;
+  }
+
+  /* A near-zero duration on an infinite animation would flicker, not stop. */
+  .wiggle {
+    animation: none;
+  }
+}
