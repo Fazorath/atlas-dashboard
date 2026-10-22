@@ -1,0 +1,47 @@
+---
+title: Atlas Manual
+description: Install, configure and run Atlas, the self-hosted personal dashboard.
+template: splash
+hero:
+  title: Your day, on one screen.
+  tagline: Atlas is a self-hosted dashboard you open every morning. Weather, habits, work shifts, money, listening, school and sleep, gathered from the apps you already use into one Board of Widgets you arrange yourself.
+  actions:
+    - text: Install Atlas
+      link: /atlas-dashboard/start/install/
+      icon: right-arrow
+    - text: What Atlas is
+      link: /atlas-dashboard/start/what-atlas-is/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import todayDesktop from '../../assets/screens/today-desktop.png';
+import todayPhone from '../../assets/screens/today-phone.png';
+
+<div class="atlas-pair">
+	<Image src={todayDesktop} alt="Today on a desktop: Shift, Weather, Balance, Sleep week, Due soon and Today's habits" />
+	<Image src={todayPhone} alt="Today on a phone, with the floating tab bar" />
+</div>
+
+## Start in five minutes
+
+A fresh install turns on only **Weather** and **Habits**, the two Modules that need no account. Everything else is a line you uncomment in one YAML file when you are ready.
+
+<CardGrid>
+	<LinkCard title="Install" description="Docker Compose, one .env, one config folder." href="/atlas-dashboard/start/install/" />
+	<LinkCard title="Try the demo data" description="Look around with a made-up student's week before connecting anything." href="/atlas-dashboard/start/demo-data/" />
+	<LinkCard title="Pick your Modules" description="Seven first-party Modules, each with its own page." href="/atlas-dashboard/modules/weather/" />
+	<LinkCard title="Arrange your Boards" description="Edit mode, Sizes and the Widget gallery." href="/atlas-dashboard/using/boards-and-widgets/" />
+</CardGrid>
+
+## What it is not
+
+<CardGrid>
+	<Card title="Not a hosted service" icon="laptop">
+		Atlas runs on your own machine. Nothing leaves it except the requests each Module makes to its own Source.
+	</Card>
+	<Card title="Not behind a login (yet)" icon="warning">
+		Atlas has no accounts. Keep it on loopback and put a reverse proxy with auth, or a private network such as Tailscale, in front of it.
+	</Card>
+</CardGrid>

@@ -1,0 +1,15 @@
+---
+/* Starlight's <head>, plus this page's accent. A Module page names its Area in
+   frontmatter and every accent-coloured thing on the page (links, the sidebar
+   highlight, asides, the title eyebrow) follows it. */
+import Default from '@astrojs/starlight/components/Head.astro';
+import { AREAS, BRAND } from '../areas';
+
+const area = Astro.locals.starlightRoute.entry.data.area;
+const a = (area && AREAS[area]) || BRAND;
+const css = `:root{--atlas-accent:${a.accent};--atlas-accent-tint:${a.tint};--atlas-accent-track:${a.track};}`;
+---
+
+<Default />
+<meta name="theme-color" content="#050505" />
+<style set:html={css} is:inline></style>

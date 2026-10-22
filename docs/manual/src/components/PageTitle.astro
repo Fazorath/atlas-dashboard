@@ -1,0 +1,20 @@
+---
+/* Starlight's page title, with an eyebrow on Module pages: the Area's accent
+   square, its name, and the Module id you write in config/atlas.yaml. */
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+import { AREAS } from '../areas';
+
+const { area, module } = Astro.locals.starlightRoute.entry.data;
+const a = area ? AREAS[area] : undefined;
+---
+
+{
+	a && (
+		<p class="atlas-eyebrow">
+			<span class="atlas-square" aria-hidden="true" />
+			<span>{a.label}</span>
+			{module && <code>{module}</code>}
+		</p>
+	)
+}
+<Default />

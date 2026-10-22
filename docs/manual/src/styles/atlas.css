@@ -1,0 +1,217 @@
+/* The Atlas look for Starlight: the app's instrument-panel neutrals, its two
+   faces, and one accent per page. `--atlas-accent*` are set per page in
+   components/Head.astro: an Area's colour on its Module page, Today's violet
+   everywhere else. The neutrals are the token block of the app's
+   frontend/src/index.css. */
+
+:root,
+:root[data-theme='dark'] {
+	--atlas-bg: #050505;
+	--atlas-surface: #0e0e0e;
+	--atlas-surface-2: #1a1a1a;
+	--atlas-border: #232323;
+	--atlas-divider: #1f1f1f;
+	--atlas-text: #ededed;
+	--atlas-muted: #8a8a8a;
+
+	--sl-font: 'Space Grotesk Variable', system-ui, sans-serif;
+	--sl-font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+	--sl-color-accent-low: var(--atlas-accent-tint, #1e1b3a);
+	--sl-color-accent: var(--atlas-accent, #9b8cff);
+	--sl-color-accent-high: color-mix(in srgb, var(--atlas-accent, #9b8cff) 55%, white);
+
+	--sl-color-white: #ffffff;
+	--sl-color-gray-1: var(--atlas-text);
+	--sl-color-gray-2: #cfcfcf;
+	--sl-color-gray-3: var(--atlas-muted);
+	--sl-color-gray-4: #5c5c5c;
+	--sl-color-gray-5: var(--atlas-border);
+	--sl-color-gray-6: var(--atlas-surface);
+	--sl-color-black: var(--atlas-bg);
+
+	--sl-color-bg: var(--atlas-bg);
+	--sl-color-bg-nav: var(--atlas-bg);
+	--sl-color-bg-sidebar: var(--atlas-bg);
+	--sl-color-bg-inline-code: var(--atlas-surface-2);
+	--sl-color-hairline: var(--atlas-divider);
+	--sl-color-hairline-light: var(--atlas-border);
+	--sl-color-hairline-shade: var(--atlas-bg);
+	--sl-color-text-accent: var(--atlas-accent, #9b8cff);
+
+	color-scheme: dark;
+}
+
+body {
+	background-color: var(--atlas-bg);
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Headlines at 600, like the app: Space Grotesk reads heavy at 700. */
+h1,
+h2,
+h3,
+h4,
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6),
+.site-title {
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.site-title {
+	color: var(--atlas-text);
+}
+
+/* Sidebar group labels as the app's small uppercase card titles. */
+.sidebar-content .group-label .large {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--atlas-muted);
+}
+
+.sidebar-content a[aria-current='page'] {
+	background: var(--atlas-surface-2);
+	color: var(--atlas-text);
+	box-shadow: inset 2px 0 0 var(--atlas-accent, #9b8cff);
+	border-radius: 6px;
+	font-weight: 600;
+}
+
+.sidebar-content .sl-badge {
+	font-family: var(--sl-font-mono);
+	background: transparent;
+	border-color: var(--atlas-border);
+	color: var(--atlas-muted);
+}
+
+/* Module page eyebrow: the Area's square, its name, the Module id. */
+.atlas-eyebrow {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	margin: 0 0 0.6rem;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--atlas-muted);
+}
+
+.atlas-square {
+	width: 8px;
+	height: 8px;
+	background: var(--atlas-accent);
+}
+
+.atlas-eyebrow code {
+	text-transform: none;
+	letter-spacing: 0;
+	font-size: 12px;
+	padding: 0.1rem 0.45rem;
+	border-radius: 6px;
+	background: var(--atlas-accent-tint);
+	color: var(--atlas-accent);
+}
+
+/* Content: cards are surfaces with a hairline, no shadow, small corners. */
+.sl-markdown-content code:not(:where(.not-content *)) {
+	border-radius: 4px;
+	font-size: 0.875em;
+}
+
+.sl-markdown-content table {
+	display: table;
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9375rem;
+}
+
+.sl-markdown-content :is(th, td) {
+	border: 0;
+	border-bottom: 1px solid var(--atlas-divider);
+	padding: 0.55rem 0.75rem 0.55rem 0;
+	background: transparent;
+}
+
+.sl-markdown-content th {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--atlas-muted);
+	border-bottom-color: var(--atlas-border);
+}
+
+.sl-markdown-content img {
+	border: 1px solid var(--atlas-border);
+	border-radius: 8px;
+	background: var(--atlas-bg);
+}
+
+/* Phone shots sit at phone width rather than stretching across the column. */
+.sl-markdown-content img[alt*='phone' i] {
+	max-width: min(320px, 100%);
+}
+
+.starlight-aside {
+	border: 1px solid var(--atlas-border);
+	border-left: 3px solid var(--sl-color-asides-border, var(--atlas-accent));
+	border-radius: 8px;
+	background: var(--atlas-surface);
+}
+
+.starlight-aside--note {
+	--sl-color-asides-border: var(--atlas-accent);
+	--sl-color-asides-text-accent: var(--atlas-accent);
+}
+
+.card,
+.sl-link-card {
+	border: 1px solid var(--atlas-border) !important;
+	border-radius: 8px;
+	background: var(--atlas-surface);
+	box-shadow: none !important;
+}
+
+.sl-link-card:hover {
+	border-color: var(--atlas-accent) !important;
+}
+
+/* Splash hero. */
+.hero h1 {
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
+
+.hero .tagline {
+	color: var(--atlas-muted);
+}
+
+.sl-markdown-content a {
+	text-underline-offset: 3px;
+	text-decoration-thickness: 1px;
+}
+
+/* A side-by-side pair of screenshots, desktop then phone. */
+.atlas-pair {
+	display: grid;
+	grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+	gap: 1rem;
+	align-items: start;
+}
+
+.atlas-pair img[alt*='phone' i] {
+	max-width: 100%;
+}
+
+@media (max-width: 50rem) {
+	.atlas-pair {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.atlas-pair img[alt*='phone' i] {
+		max-width: min(320px, 100%);
+	}
+}
