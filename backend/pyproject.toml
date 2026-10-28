@@ -14,6 +14,28 @@ dependencies = [
     "httpx>=0.28",
     "icalendar>=6.0",
     "pyyaml>=6.0",
+    # Notifications (ADR 0007): Web Push encryption and VAPID signing.
+    "pywebpush>=2.0",
+    # Secrets entered in the app, sealed with ATLAS_SECRET_KEY (ADRs 0004, 0008).
+    "cryptography>=43",
+    # Counting a Habit icon as one emoji: `\X` knows flag, skin-tone and ZWJ
+    # sequences, which the standard library's `re` doesn't.
+    "regex>=2024.9",
+]
+
+[project.optional-dependencies]
+# Reading a Week from a Schedule photo (ADR 0006). Installed only when the
+# image is built with WITH_VISION=true; the Dockerfile adds Tesseract itself.
+vision = [
+    "opencv-python-headless>=4.10",
+    "numpy>=2.0",
+    "pillow>=11.0",
+    "pytesseract>=0.3.13",
+]
+test = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "aiosqlite>=0.20",
 ]
 
 [build-system]
@@ -22,6 +44,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100

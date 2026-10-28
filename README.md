@@ -7,13 +7,15 @@ its own archive of whatever it can.
 
 **[Read the Atlas Manual →](https://fazorath.github.io/atlas-dashboard/)**
 
-![Today on a desktop, filled with demo data](docs/manual/src/assets/screens/today-desktop.png)
+![A short YAML file becomes a Homelab Services widget on the Today board, which is then dragged to the top-left and resized from M to L](docs/manual/src/assets/screens/readme-demo.gif)
 
-Each subject is a **module** you switch on in one YAML file. A fresh install
-starts with just Weather and Habits, which need no account; switch on the rest
-as you connect the apps you already run or use.
+Each subject is a **module**. The first time you open Atlas, **Setup** walks
+you through it in the browser: claim the install, say who it's for and where
+you are, then switch on modules and connect each one, with a **Test** button
+that tells you whether it works before you save. Weather and Habits need no
+account and start on.
 
-| Module | Area | Needs | Example config | Manual |
+| Module | Area | Needs | On by default | Manual |
 |---|---|---|---|---|
 | `open_meteo` | Weather | nothing: your coordinates | on | [Weather](https://fazorath.github.io/atlas-dashboard/modules/weather/) |
 | `habits` | Habits | nothing | on | [Habits](https://fazorath.github.io/atlas-dashboard/modules/habits/) |
@@ -27,20 +29,25 @@ as you connect the apps you already run or use.
 
 ```bash
 git clone https://github.com/Fazorath/atlas-dashboard.git atlas && cd atlas
-cp .env.example .env && chmod 600 .env     # secrets: DB password, tokens
-$EDITOR .env                               # set POSTGRES_PASSWORD (not change-me)
-cp -r config.example config                # everything else
-$EDITOR config/atlas.yaml                  # your name, timezone, modules to add
-$EDITOR config/modules/open_meteo.yaml     # your coordinates
+cp .env.example .env && chmod 600 .env
+$EDITOR .env      # POSTGRES_PASSWORD, and ATLAS_SECRET_KEY from `openssl rand -base64 32`
 docker compose up -d --build
+docker compose logs atlas-api | grep 'setup code'
 ```
 
-Then open <http://127.0.0.1:8188>. Weather fills in at the next :07, or now with
-`curl -X POST 127.0.0.1:8187/api/sync/weather`.
+Then open <http://127.0.0.1:8188> and follow Setup. The setup code from the
+log proves you run the machine; you then pick the **Owner passphrase**, which
+is what lets you change settings later, from the Status screen.
 
-**Atlas has no login yet.** Its ports bind to `127.0.0.1`; put a reverse proxy
-with auth, or a private network such as Tailscale, in front of it rather than
-publishing it to the open internet.
+Setup writes `config/` for you, as plain YAML you can still edit by hand
+(changes apply within seconds, no restart). Passwords and tokens you enter go
+to an encrypted store in the database, sealed with `ATLAS_SECRET_KEY` — back
+that key up with `.env`.
+
+**Only settings are protected.** Anyone who can open Atlas can read it and
+tick your habits. Its ports bind to `127.0.0.1`; put a reverse proxy with auth,
+or a private network such as Tailscale, in front of it rather than publishing
+it to the open internet.
 
 Want to look around first? [Fill it with demo data](https://fazorath.github.io/atlas-dashboard/start/demo-data/).
 
@@ -48,6 +55,7 @@ Want to look around first? [Fill it with demo data](https://fazorath.github.io/a
 
 - [Install](https://fazorath.github.io/atlas-dashboard/start/install/) and [Configuration](https://fazorath.github.io/atlas-dashboard/start/configuration/)
 - [Today](https://fazorath.github.io/atlas-dashboard/using/today/), [Boards & Widgets](https://fazorath.github.io/atlas-dashboard/using/boards-and-widgets/), [Sync & freshness](https://fazorath.github.io/atlas-dashboard/using/sync-and-freshness/)
+- [Custom modules](https://fazorath.github.io/atlas-dashboard/next/custom-modules/): add your own widgets with one YAML file, from static links to numbers pulled from any JSON API, with a Home Assistant example
 - A page per module: what it shows, what you need, setup, config keys, what it stores, and its gotchas
 - [Updating](https://fazorath.github.io/atlas-dashboard/operate/updating/), [Backups](https://fazorath.github.io/atlas-dashboard/operate/backups/), [Troubleshooting](https://fazorath.github.io/atlas-dashboard/operate/troubleshooting/)
 
@@ -60,12 +68,9 @@ Atlas is being worked on in the open over the next few weeks, and early testers
 are welcome. Install it, try it with demo data or your own, and open an issue
 for anything that breaks or anything you wish it did.
 
-Want to try it early? [Sign up as a tester](https://docs.google.com/forms/d/e/1FAIpQLSdxZBcTgOdY8poCUWc8kH8xmdDmS68RYQbLGJXGSs1on70KTw/viewform)
-and I'll email you when new releases land.
+Want to try it early? [Open an issue](https://github.com/Fazorath/atlas-dashboard/issues/new/choose)
+for a bug or an idea; that's the whole process, and nothing personal is collected.
 
 ## What's next
 
-- **[Custom modules](https://fazorath.github.io/atlas-dashboard/next/custom-modules/)**:
-  add your own widgets from inside the app with a short YAML file, from static
-  links and notes to numbers pulled from any JSON API you run.
 - A catalog of community modules to browse and install.

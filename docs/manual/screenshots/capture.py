@@ -10,10 +10,16 @@ reduced so Edit mode's wiggle doesn't blur a frame.
 Leak-check every image before committing it: these ship in a public site.
 """
 
-import sys
-from pathlib import Path
+from __future__ import annotations
 
-from playwright.sync_api import Page, sync_playwright
+import json
+import sys
+import urllib.request
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 DESKTOP = {"viewport": {"width": 1200, "height": 820}, "device_scale_factor": 1}
 PHONE = {
@@ -37,6 +43,26 @@ SCREENS = (
 )
 
 
+def check_demo(config: dict) -> None:
+    """Refuse anything but the seeded demo. These pictures ship in a public
+    site, so a real install (someone else's name) must never be shot."""
+    name = str(config.get("name", "")).strip()
+    if name != "Sam":
+        raise SystemExit(
+            f"refusing to shoot: /api/config says the owner is {name!r}, not the "
+            "'Sam' demo. Is this your real install?"
+        )
+
+
+def assert_demo(base: str) -> None:
+    try:
+        with urllib.request.urlopen(base + "/api/config", timeout=15) as resp:
+            config = json.load(resp)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"refusing to shoot: cannot read {base}/api/config ({exc})")
+    check_demo(config if isinstance(config, dict) else {})
+
+
 def settle(page: Page) -> None:
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(1200)
@@ -49,7 +75,10 @@ def shot(page: Page, out: Path, name: str, full: bool = False) -> None:
 
 
 def main(base: str, out: Path) -> None:
+    assert_demo(base)
     out.mkdir(parents=True, exist_ok=True)
+    from playwright.sync_api import sync_playwright
+
     with sync_playwright() as p:
         browser = p.chromium.launch()
         for size, opts in (("desktop", DESKTOP), ("phone", PHONE)):

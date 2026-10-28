@@ -15,7 +15,7 @@ description: How Atlas reads its Sources, how it tells you how fresh a reading i
 | `finance` | `securo` | every 15 minutes | live probe |
 | `listening` | `audiobookshelf` | every 15 minutes | live probe |
 
-Habits and Work have no sync: you are their upstream.
+Habits and Work have no sync: you are their upstream. Cron also calls `notify` every 5 minutes, which sends any [Notifications](/atlas-dashboard/using/notifications/) that are due. It isn't listed on the Status screen; the Notifications card there shows its last check instead.
 
 Weather runs at :07 rather than :00 because the top of the hour is when every cron job on the internet hits Open-Meteo's free tier at once. Health runs hourly, not nightly, because last night only exists once your watch syncs after you wake.
 

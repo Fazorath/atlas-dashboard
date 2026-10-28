@@ -15,7 +15,7 @@ import {
 import { R, WidgetCard, type Problem } from "@/widgets/frame";
 import type { WidgetDef, WidgetProps } from "@/widgets/types";
 
-const SETUP = "Add your coordinates to .env to switch this on.";
+const SETUP = "Add your coordinates to config/modules/open_meteo.yaml to switch this on.";
 
 function useOpenMeteo() {
   const sources = useSources();

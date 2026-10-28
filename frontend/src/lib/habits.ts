@@ -1,17 +1,21 @@
 /* The habits seam.
 
    Every key starts with "habits", so one invalidate after any write refreshes
-   the day lists and the heatmap together. Today's ring and the Habits screen
+   the day lists and the week's history together. Today's ring and the Habits screen
    read the same ["habits", "day", today] entry, so a tick on either moves both
    without either knowing about the other.
 
-   Dates are local calendar days as YYYY-MM-DD. Never build one with
-   toISOString(): that is the UTC date, which in US Eastern flips to tomorrow
-   at 8pm and would file an evening's tick under the wrong day. */
+   Dates are calendar days as YYYY-MM-DD. "Today" is the day in atlas.yaml's
+   timezone (the server's rule), falling back to the device's until the config
+   is loaded. Never build one with toISOString(): that is the UTC date, which
+   in US Eastern flips to tomorrow at 8pm and would file an evening's tick
+   under the wrong day. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import { currentTimezone } from "@/lib/config";
+import { dateInZone } from "@/lib/today";
 
 export interface Habit {
   id: number;
@@ -63,10 +67,26 @@ export interface HistoryDay {
 export const HABITS_KEY = ["habits"] as const;
 const dayKey = (date: string) => ["habits", "day", date] as const;
 
-/** Local YYYY-MM-DD for a Date. */
-export function localDate(d: Date = new Date()): string {
+/** YYYY-MM-DD for a Date's local fields. With no argument: today in the
+ *  configured timezone. */
+export function localDate(d?: Date): string {
+  if (!d) return dateInZone(currentTimezone());
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** YYYY-MM-DD of the instant `at` in the configured timezone. Use this for
+ *  "what day is it now" and "what day does this timestamp fall on". Plain
+ *  `localDate(d)` reads the device's fields, which is right only for a Date
+ *  built from a calendar day (parseLocalDate, addDays). */
+export function zonedDate(at: Date = new Date()): string {
+  return dateInZone(currentTimezone(), at);
+}
+
+/** Local midnight of today's date in the configured timezone, for code that
+ *  does calendar arithmetic with Date fields (week starts, ranges). */
+export function todayStart(at: Date = new Date()): Date {
+  return parseLocalDate(zonedDate(at));
 }
 
 /** Parse YYYY-MM-DD as local midnight (Date("2026-09-22") would be UTC). */
@@ -155,7 +175,7 @@ function useHabitWrite<Vars>(fn: (vars: Vars) => Promise<unknown>) {
 }
 
 export function useCreateHabit() {
-  return useHabitWrite((body: { name: string }) =>
+  return useHabitWrite((body: { name: string; icon?: string }) =>
     api<HabitDefinition>("/habits/", { method: "POST", body: JSON.stringify(body) }),
   );
 }
@@ -168,6 +188,7 @@ export function useUpdateHabit() {
     }: {
       id: number;
       name?: string;
+      icon?: string | null;
       archived?: boolean;
       sort_order?: number;
       metric?: string | null;

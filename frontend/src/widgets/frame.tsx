@@ -15,6 +15,7 @@ import { Link, useLocation } from "react-router-dom";
 
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { todayStart } from "@/lib/habits";
 import { AREAS, type AreaKey } from "@/lib/sections";
 import type { SourceState } from "@/lib/sources";
 import { cn } from "@/lib/utils";
@@ -262,7 +263,7 @@ export function MiniBars({
 }
 
 /** Monday-first week containing today, as local dates. */
-export function calendarWeek(now = new Date()) {
+export function calendarWeek(now = todayStart()) {
   const monday = new Date(now);
   monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   return Array.from({ length: 7 }, (_, i) => {

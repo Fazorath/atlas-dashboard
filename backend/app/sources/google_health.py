@@ -73,6 +73,8 @@ SCOPES: dict[str, str] = {
 LOOKBACK_DAYS = 7
 #: The first run after connecting pulls this much history instead.
 BACKFILL_DAYS = 90
+#: Ids of made-up nights written by app/demo.py.
+DEMO_ID_PREFIX = "demo-"
 #: `active-minutes` and `total-calories` refuse a roll-up range over 14 days.
 ROLLUP_CHUNK_DAYS = 14
 SLEEP_PAGE_SIZE = 25  # also Google's maximum for sleep
@@ -95,9 +97,11 @@ class Disconnected(RuntimeError):
 
 # --- OAuth: consent --------------------------------------------------------
 
-# state -> monotonic time it was issued. One process, one user: an in-memory
-# map is enough, and a restart mid-consent costs one more click.
-_pending_states: dict[str, float] = {}
+# state -> (monotonic time it was issued, the Atlas path to come back to). One
+# process, one user: an in-memory map is enough, and a restart mid-consent
+# costs one more click.
+_pending_states: dict[str, tuple[float, str]] = {}
+DEFAULT_RETURN = "/status"
 _refresh_lock = asyncio.Lock()
 
 
@@ -109,13 +113,37 @@ def paste_back() -> bool:
     return host in ("localhost", "127.0.0.1", "::1")
 
 
-def authorization_url() -> str:
+def safe_return(path: str) -> bool:
+    """A path on this Atlas — never another site, however it is spelled."""
+    parts = urlsplit(path)
+    return (
+        path.startswith("/")
+        and not path.startswith("//")
+        and "\\" not in path
+        and not parts.scheme
+        and not parts.netloc
+    )
+
+
+def return_path(state: str) -> str:
+    """Where the browser goes after Google answers for this `state`."""
+    entry = _pending_states.get(state)
+    return entry[1] if entry else DEFAULT_RETURN
+
+
+def drop_state(state: str) -> None:
+    _pending_states.pop(state, None)
+
+
+def authorization_url(return_to: str = DEFAULT_RETURN) -> str:
+    if not safe_return(return_to):
+        raise ValueError("return_to must be a path on this Atlas")
     now = time.monotonic()
-    for stale in [s for s, t in _pending_states.items() if now - t > STATE_TTL_S]:
+    for stale in [s for s, (t, _) in _pending_states.items() if now - t > STATE_TTL_S]:
         _pending_states.pop(stale, None)
 
     state = secrets.token_urlsafe(24)
-    _pending_states[state] = now
+    _pending_states[state] = (now, return_to)
     params = {
         "client_id": settings.google_oauth_client_id,
         "redirect_uri": settings.google_oauth_redirect_uri,
@@ -578,16 +606,14 @@ async def _window(session: AsyncSession) -> tuple[date, date]:
     archived day, so the days the token was dead for are filled in too.
     Never further back than the backfill."""
     today = local_today()
-    newest = max(
-        filter(
-            None,
-            [
-                (await session.execute(select(func.max(SleepSession.wake_date)))).scalar(),
-                (await session.execute(select(func.max(DailyActivity.date)))).scalar(),
-            ],
-        ),
-        default=None,
-    )
+    # Demo nights (app/demo.py: id "demo-...") never count, or a demo install
+    # would skip the backfill on its first real sync. Demo activity rows carry
+    # no marker, so activity is left out of the check; sleep sets the window.
+    newest = (
+        await session.execute(
+            select(func.max(SleepSession.wake_date)).where(~SleepSession.id.startswith(DEMO_ID_PREFIX))
+        )
+    ).scalar()
     floor = today - timedelta(days=BACKFILL_DAYS - 1)
     start = today - timedelta(days=LOOKBACK_DAYS - 1)
     if newest is None:

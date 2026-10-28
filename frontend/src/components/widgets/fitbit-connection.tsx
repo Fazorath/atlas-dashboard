@@ -7,7 +7,8 @@
    disconnect. */
 
 import { Link2, Moon, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,7 +24,7 @@ import {
 } from "@/lib/sleep";
 import { timeAgo } from "@/lib/utils";
 
-function useConnect(conn: Connection) {
+function useConnect(conn: Connection, returnTo?: string) {
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -32,7 +33,7 @@ function useConnect(conn: Connection) {
     setError(null);
     setBusy(true);
     try {
-      await startConnect(conn.paste_back);
+      await startConnect(conn.paste_back, returnTo);
       if (conn.paste_back) setWaiting(true);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Couldn't start the Google sign-in.");
@@ -95,13 +96,16 @@ export function ConnectionCard({
   conn,
   flash,
   fetchedAt,
+  returnTo,
 }: {
   conn: Connection;
   /** Outcome carried back on the redirect from Google, if any. */
   flash?: { ok: boolean; message: string } | null;
   fetchedAt: string | null;
+  /** Where Google's answer lands; Status unless Setup says otherwise. */
+  returnTo?: string;
 }) {
-  const { connect, error, waiting, busy } = useConnect(conn);
+  const { connect, error, waiting, busy } = useConnect(conn, returnTo);
   const disconnect = useDisconnect();
   const [confirm, setConfirm] = useState(false);
 
@@ -222,4 +226,27 @@ function PasteBack() {
       ) : null}
     </form>
   );
+}
+
+/** Google's redirect comes back as ?connected=1 or ?oauth_error=… on the
+    screen Connect was pressed on; read it once, then drop just those two from
+    the address so a refresh doesn't repeat it (Setup keeps its `step`). */
+export function useOAuthFlash() {
+  const [params, setParams] = useSearchParams();
+  const [flash] = useState(() => {
+    const connected = params.get("connected");
+    // "empty": the first sync ran but archived no real nights, so don't claim 90 days.
+    if (connected === "empty") return { ok: true, message: "Connected — no nights archived yet." };
+    if (connected) return { ok: true, message: "Connected — your last 90 days are in." };
+    const error = params.get("oauth_error");
+    return error ? { ok: false, message: error } : null;
+  });
+  useEffect(() => {
+    if (!params.has("connected") && !params.has("oauth_error")) return;
+    const next = new URLSearchParams(params);
+    next.delete("connected");
+    next.delete("oauth_error");
+    setParams(next, { replace: true });
+  }, [params, setParams]);
+  return flash;
 }

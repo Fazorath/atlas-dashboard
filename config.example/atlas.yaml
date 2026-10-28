@@ -1,6 +1,6 @@
 # Atlas — who this dashboard is for and what it shows.
-# Copy this folder to `config/` and edit. Restart atlas-api after a change:
-#   docker compose restart atlas-api
+# Setup writes config/ for you the first time you open Atlas; this folder is
+# the reference for editing it by hand. A change applies within seconds.
 
 # The greeting on Today: "Hello, Sam!". Leave blank for just "Hello!".
 name: Sam
@@ -11,7 +11,7 @@ timezone: America/New_York
 
 # The modules that are on. Only the two that need no account start on, so a
 # fresh install has nothing to set up. To add one, uncomment its line and fill
-# in its file in modules/ (secrets go in .env, never here). Delete a line to
+# in its file in modules/ (secrets go in Setup or .env, never here). Delete a line to
 # switch a module off — its screen, its widgets and its sync all go away;
 # nothing it stored is deleted.
 modules:

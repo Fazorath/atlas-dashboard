@@ -37,11 +37,14 @@ export function Sheet({
       }
     };
     document.addEventListener("keydown", onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // On a phone the app shell's column scrolls, not the body; lock both.
+    const locked = [document.body, document.querySelector<HTMLElement>("[data-scroll-root]")]
+      .filter((el): el is HTMLElement => el !== null)
+      .map((el) => [el, el.style.overflow] as const);
+    for (const [el] of locked) el.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = overflow;
+      for (const [el, overflow] of locked) el.style.overflow = overflow;
       prev?.focus();
     };
   }, [onClose]);

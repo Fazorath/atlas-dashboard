@@ -33,6 +33,10 @@ export interface WidgetDef {
    *  (an Area-only widget, too detailed for Today). */
   placement: "anywhere" | "area";
   render: ComponentType<WidgetProps>;
+  /** True: offered in the Widget gallery but left out of an Area's default
+   *  Board (Today's list is explicit). For a Widget that is an alternative to
+   *  another one, so a fresh Board doesn't show the same thing twice. */
+  galleryOnly?: boolean;
   /** A hook: true when the Widget has nothing to say on this Board right now
    *  and should step aside so the grid packs (Next class on a day without
    *  class). Ignored in Edit mode, where every placed Widget stays visible. */

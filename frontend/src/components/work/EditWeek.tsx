@@ -4,26 +4,40 @@
    inputs to set it — so a week typed in from a schedule reads back at a glance.
 
    Saving sends the whole week: a day left off is a day off, and the week
-   counts as entered from then on. Clear week makes it "not entered" again. */
+   counts as entered from then on. Clear week makes it "not entered" again.
+
+   "Read from photo" sends a Schedule photo off to be read in the background
+   (ADR 0006); you can close the sheet. When a Draft week exists for the week
+   shown, the form opens on it instead of the saved week, with any day that
+   couldn't be read left off and marked — Save makes it the week, Discard
+   drops it. */
 
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Copy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Camera, ChevronLeft, ChevronRight, Copy } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
+import { workPhotoEnabled } from "@/lib/config";
+import { draftToOffer } from "@/lib/draft-offer";
+import { bannerDraft, copied, fromDraft, SAVED, saveDraftId, type RowSource } from "@/lib/row-source";
 import { cn } from "@/lib/utils";
 import {
   addDays,
+  draftFor,
   hoursLabel,
   toMinutes,
   useClearWeek,
+  useDiscardRead,
+  usePhotoReads,
+  useReadPhoto,
   useSaveWeek,
   useWeek,
   weekDays,
   weekdayShort,
   weekQuery,
   weekRange,
+  type PhotoRead,
   type Week,
 } from "@/lib/work";
 
@@ -32,6 +46,8 @@ interface Row {
   on: boolean;
   start: string;
   end: string;
+  /** From a Draft week: what was on the paper for a day that couldn't be read. */
+  unread?: string;
 }
 
 const DEFAULT = { start: "09:00", end: "17:00" };
@@ -42,6 +58,14 @@ function rowsFrom(start: string, week: Week | undefined, shiftDays = 0): Row[] {
     const s = byDate.get(date);
     return s ? { date, on: true, start: s.start, end: s.end } : { date, on: false, ...DEFAULT };
   });
+}
+
+function rowsFromDraft(draft: PhotoRead): Row[] {
+  return (draft.days ?? []).map((d) =>
+    d.start && d.end
+      ? { date: d.date, on: true, start: d.start, end: d.end }
+      : { date: d.date, on: false, ...DEFAULT, ...(d.off ? {} : { unread: d.raw }) },
+  );
 }
 
 const valid = (r: Row) => !r.on || toMinutes(r.end) > toMinutes(r.start);
@@ -60,16 +84,62 @@ export function EditWeek({ initialWeek, onClose }: { initialWeek: string; onClos
   const save = useSaveWeek();
   const clear = useClearWeek();
   const [copyNote, setCopyNote] = useState<string | null>(null);
+  const photoOn = workPhotoEnabled();
+  const reads = usePhotoReads();
+  const readPhoto = useReadPhoto();
+  const discard = useDiscardRead();
+  // Where the rows came from; the banner and Save's draft id follow it.
+  const [source, setSource] = useState<RowSource>(SAVED);
+  const banner = bannerDraft(source);
+  const basedOn = saveDraftId(source);
+  // A Draft week the user waved off; not offered again.
+  const [dismissed, setDismissed] = useState<number | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const reading = reads.data?.some((r) => r.status === "reading") ?? false;
+  const lastFailed = reads.data?.find((r) => r.status === "failed");
 
   // Fill the form once per week shown, so a background refetch never wipes
-  // what you've typed.
+  // what you've typed. A Draft week for it wins over the saved week.
   useEffect(() => {
-    if (week.data && loadedFor !== start) {
-      setRows(rowsFrom(start, week.data));
-      setLoadedFor(start);
-      setCopyNote(null);
-    }
-  }, [week.data, start, loadedFor]);
+    if (!week.data || loadedFor === start || (photoOn && reads.isPending)) return;
+    const draft = draftFor(reads.data, start);
+    setRows(draft ? rowsFromDraft(draft) : rowsFrom(start, week.data));
+    setSource(draft ? fromDraft(draft) : SAVED);
+    setDismissed(null);
+    discard.reset();
+    setLoadedFor(start);
+    setCopyNote(null);
+  }, [week.data, start, loadedFor, photoOn, reads.isPending, reads.data]);
+
+  const pickPhoto = (file: File | undefined) => {
+    if (file) readPhoto.mutate({ file, week: start });
+    if (fileInput.current) fileInput.current.value = "";
+  };
+
+  // Waits for the server: on failure the Draft week stays loaded and we say so.
+  const discardDraft = () => {
+    if (!banner || !week.data) return;
+    const saved = week.data;
+    discard.mutate(banner.id, {
+      onSuccess: () => {
+        setDismissed(banner.id);
+        setRows(rowsFrom(start, saved));
+        setSource(SAVED);
+      },
+    });
+  };
+
+  // A Draft week that finished after the form loaded: offered, never loaded
+  // over what's typed.
+  const offer = rows && loadedFor === start ? draftToOffer(reads.data, start, basedOn, dismissed) : undefined;
+
+  const loadOffer = () => {
+    if (!offer) return;
+    setRows(rowsFromDraft(offer));
+    setSource(fromDraft(offer));
+    discard.reset();
+    setCopyNote(null);
+  };
 
   const step = (n: number) => {
     setRows(null);
@@ -83,11 +153,13 @@ export function EditWeek({ initialWeek, onClose }: { initialWeek: string; onClos
       return;
     }
     setRows(rowsFrom(start, prev, 7));
+    setSource(copied(source, offer?.id ?? null));
+    discard.reset();
     setCopyNote(`Copied from ${weekRange(prev.week_start)} — fix what changed.`);
   };
 
   const update = (i: number, patch: Partial<Row>) =>
-    setRows((rs) => rs && rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+    setRows((rs) => rs && rs.map((r, j) => (j === i ? { ...r, unread: undefined, ...patch } : r)));
 
   const toggle = (i: number) => {
     if (!rows) return;
@@ -113,7 +185,7 @@ export function EditWeek({ initialWeek, onClose }: { initialWeek: string; onClos
   const submit = () => {
     if (!rows || bad.length) return;
     save.mutate(
-      { start, shifts: rows.filter((r) => r.on).map(({ date, start: s, end }) => ({ date, start: s, end })) },
+      { start, draftId: basedOn, shifts: rows.filter((r) => r.on).map(({ date, start: s, end }) => ({ date, start: s, end })) },
       { onSuccess: onClose },
     );
   };
@@ -142,6 +214,79 @@ export function EditWeek({ initialWeek, onClose }: { initialWeek: string; onClos
           </Button>
         </div>
         {copyNote ? <p className="-mt-1 text-[13px] text-fg-muted">{copyNote}</p> : null}
+
+        {photoOn ? (
+          <div className="-mt-1 flex flex-wrap items-center gap-2">
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => pickPhoto(e.target.files?.[0])}
+            />
+            <Button
+              variant="ghost"
+              className="h-9 rounded-row border border-border-subtle px-3 text-[13px] font-medium text-fg"
+              onClick={() => fileInput.current?.click()}
+              disabled={reading || readPhoto.isPending}
+            >
+              <Camera aria-hidden strokeWidth={2.2} className="size-3.5" />
+              Read from photo
+            </Button>
+            <p className="min-w-0 flex-1 text-[13px] text-fg-muted" role="status">
+              {readPhoto.isPending
+                ? "Sending…"
+                : reading
+                  ? "Reading your photo — you can close this; the Work screen says when it's ready."
+                  : lastFailed
+                    ? `The last photo couldn't be read — ${lastFailed.error || "no reason was given."}`
+                    : null}
+            </p>
+          </div>
+        ) : null}
+
+        {offer ? (
+          <div className="flex items-center gap-2 rounded-row bg-accent-tint px-3 py-2 text-[13px]" role="status">
+            <Camera aria-hidden strokeWidth={2.2} className="size-4 shrink-0 text-accent" />
+            <span className="min-w-0 flex-1">Your schedule was read &mdash; load it?</span>
+            <Button variant="ghost" className="h-8 px-2 text-[13px] font-medium" onClick={loadOffer}>
+              Load it
+            </Button>
+            <Button
+              variant="ghost"
+              className="h-8 px-2 text-[13px] font-medium"
+              onClick={() => setDismissed(offer.id)}
+            >
+              Dismiss
+            </Button>
+          </div>
+        ) : null}
+
+        {banner ? (
+          <div className="flex items-center gap-2 rounded-row bg-accent-tint px-3 py-2 text-[13px]" role="status">
+            <Camera aria-hidden strokeWidth={2.2} className="size-4 shrink-0 text-accent" />
+            <span className="min-w-0 flex-1">
+              Filled in from your schedule photo — check it, then Save.
+              {banner.week_guessed ? (
+                <span className="font-semibold">
+                  {" "}
+                  Its dates couldn&rsquo;t be read, so it&rsquo;s filed under the week you had open. If
+                  that&rsquo;s the wrong week, Discard — Save replaces this week&rsquo;s shifts.
+                </span>
+              ) : null}
+              {rows?.some((r) => r.unread !== undefined) ? " Marked days couldn't be read." : ""}
+            </span>
+            <Button variant="ghost" className="h-8 px-2 text-[13px] font-medium" onClick={discardDraft} disabled={discard.isPending}>
+              Discard
+            </Button>
+          </div>
+        ) : null}
+
+        {discard.isError ? (
+          <p className="-mt-2 text-[13px] text-due" role="alert">
+            Couldn&rsquo;t discard it — {discard.error.message}
+          </p>
+        ) : null}
 
         {week.isError ? (
           <p className="text-[13px] text-fg-muted">Couldn&rsquo;t reach the work API.</p>
@@ -209,6 +354,10 @@ export function EditWeek({ initialWeek, onClose }: { initialWeek: string; onClos
                       className={cn(timeInput, !valid(r) && "ring-2 ring-due")}
                     />
                   </div>
+                ) : r.unread !== undefined ? (
+                  <span className="truncate text-[13px] text-due max-[479px]:col-start-2 max-[479px]:row-start-1">
+                    couldn&rsquo;t read{r.unread ? ` “${r.unread}”` : ""} — tap the day to set it
+                  </span>
                 ) : (
                   <span className="text-[13px] text-fg-dim max-[479px]:col-start-2 max-[479px]:row-start-1">off — tap the day to add</span>
                 )}

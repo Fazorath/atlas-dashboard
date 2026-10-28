@@ -1,0 +1,67 @@
+# Home Assistant: a sensor reading and a list of your lights.
+#
+# To use it:
+#   1. Copy this file to config/custom/home-assistant.yaml.
+#   2. Change `homeassistant.local:8123` below (two places) to the address
+#      you open Home Assistant at, and the entity id to a sensor you have.
+#   3. In Home Assistant, open your profile > Security > Long-lived access
+#      tokens, create one, and copy it.
+#   4. In Atlas, open Status, find "Home Assistant", and paste it as `token`.
+#      Unlock as Owner first. The token is stored encrypted, apart from this
+#      file, so this file is safe to share.
+#
+# Atlas does the fetching, not your browser, so Home Assistant needs no CORS
+# setup. It asks at most once a minute. Everything it reads is read-only.
+atlas: 1                 # the format version; every module file starts with it
+name: Home Assistant
+
+# A new Area, "Home". To put these Widgets in an Area Atlas already has, write
+# `area: weather` (or health, money, ...) instead of this mapping.
+area:
+  label: Home
+  icon: house            # any Lucide icon name (lucide.dev/icons)
+  accent: weather        # a palette name, or a hex colour like "#3aa0ff"
+
+# Secrets this file uses. Declared here by name, entered in the app, never
+# written in the file. A secret goes only in a header value or a URL query.
+secrets: [token]
+
+widgets:
+  # --- A Stat: one value from one entity ---------------------------------------
+  - id: temperature
+    type: stat
+    title: Living room
+    source:
+      # /api/states/<entity_id> answers with that one entity.
+      url: http://homeassistant.local:8123/api/states/sensor.living_room_temperature
+      # Header values may use {{secrets.<name>}}. A Widget's own `source` replaces
+      # the module's, so the headers are written out here too.
+      headers: &auth
+        Authorization: "Bearer {{secrets.token}}"
+    value: state         # a dot path into the JSON: {"state": "21.4", ...}
+    format: number       # `number` reads "21.4" as a number; `text` shows it as is
+    decimals: 1
+    unit: "°C"           # shown small after the value
+
+  # --- A List: rows from an array ------------------------------------------------
+  - id: lights
+    type: list
+    title: Lights
+    source:
+      # /api/states answers with every entity as an array, so `items` is `.`
+      # (the response itself). Every source in this file must share one host.
+      url: http://homeassistant.local:8123/api/states
+      headers: *auth     # the same headers as above
+    items: "."           # a dot path to the array; `.` is the whole response
+    where:               # keep only rows whose field matches the pattern (* and ?)
+      entity_id: "light.*"
+    limit: 10            # at most this many rows; default 10, up to 50
+    row:                 # dot paths, each read inside one row
+      title: attributes.friendly_name
+      detail: entity_id
+      value: state
+      status: state      # the field `status_map` below reads
+    status_map:          # raw value -> a dot: ok (green), warn (amber), bad (red)
+      ok: ["on"]         # quote on/off/yes/no: YAML reads them as true/false
+      bad: ["unavailable"]
+      # A value not listed here (like "off") gets no dot.

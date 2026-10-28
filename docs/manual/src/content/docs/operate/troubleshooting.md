@@ -14,10 +14,10 @@ curl -s 127.0.0.1:8187/api/sync/status | python3 -m json.tool
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| The page won't load at all | `atlas-api` didn't start, often broken YAML | `docker compose logs atlas-api`: the error names the file. |
+| The page says **API unreachable** | `atlas-api` is down or still starting, often because of a broken or invalid value in the YAML | `docker compose logs atlas-api`: the error names the file and key, e.g. ``config/modules/open_meteo.yaml: `units`: …``. Fix it, then **Try again**. |
 | A Module's Area is missing | It isn't in `modules:`, or the id is misspelt | Check `atlas.yaml`; unknown ids are listed in the log. Then `docker compose restart atlas-api`. |
 | A setting seems ignored | A typo in a key, or not restarted | Unknown keys are warned about in the log, with the list of known ones. |
-| Changed `.env`, nothing happened | `restart` keeps the old environment | `docker compose up -d atlas-api`. |
+| Changed `.env`, nothing happened | `restart` keeps the old environment | `docker compose up -d`. |
 | Habit ticks land on the wrong day | `timezone` in `atlas.yaml` | Set your IANA zone and restart. `TZ` in `.env` only sets container clocks. |
 | A Widget says **Set up** | Its Module is on but its settings or secrets are missing | See that Module's page. Status says which. |
 
@@ -31,7 +31,7 @@ curl -s 127.0.0.1:8187/api/sync/status | python3 -m json.tool
 | Money: "requires 2FA" | The Securo account has two-factor auth on | Use an account without it. |
 | Listening: problem names `ABS_TOKEN` | The API key was revoked or mistyped | Mint a new one in Audiobookshelf, **Settings → API Keys**. |
 | Listening: no "open in Audiobookshelf" link | `public_url` is blank | Set it to the address your browser uses. |
-| School: `HTTP 404, was the feed URL reset in Canvas?` | The feed URL was reset | Copy the new one into `CANVAS_ICS_URL`, `docker compose up -d atlas-api`. |
+| School: `HTTP 404, was the feed URL reset in Canvas?` | The feed URL was reset | Copy the new one into `CANVAS_ICS_URL`, `docker compose up -d`. |
 | School: nothing changes after a sync | The feed came back empty | Deliberate: an empty feed changes nothing. Open the URL in a browser to check it. |
 | Health: `redirect_uri_mismatch` | `redirect_uri` doesn't match the client exactly | Same scheme, host, port and path in both places. |
 | Health: 403 mentioning `UberMint` | The Fitbit account is a legacy Fitbit login | In the Fitbit app, sign in with "Continue with Google", then reconnect. |

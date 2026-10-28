@@ -29,10 +29,14 @@ export const FINANCE_KEY = ["finance"] as const;
 /** How far back the trend card looks. Securo caps this at 12. */
 export const TREND_MONTHS = 6;
 
-/* Every card refetch is a round trip through atlas-api to Securo, so this is
-   slower than a local read would be. Five minutes matches weather and is well
-   inside the 24h token, which means one login a day rather than one per poll. */
-const REFETCH_MS = 5 * 60_000;
+/* "Live" means Atlas reads Securo on every request, not that the screen
+   redraws itself, so this interval is how soon a change in Securo can show.
+   A minute keeps the screen close to Securo without hammering it: each poll is
+   a round trip through atlas-api, and the 24h token means one login a day, not
+   one per poll. Polling pauses while the tab is hidden, and returning to it
+   refetches anything older than the default staleTime. Securo pulls from the
+   bank on its own schedule, which Atlas cannot speed up. */
+const REFETCH_MS = 60_000;
 
 export interface FinanceQuery {
   isPending: boolean;

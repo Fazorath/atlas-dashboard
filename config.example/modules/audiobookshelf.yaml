@@ -1,6 +1,7 @@
 # Listening — a live, read-only view of Audiobookshelf. Atlas never writes to
 # it, so nothing here can move your place in a book.
-# API key goes in .env (ABS UI -> Settings -> API Keys):
+# API key (ABS UI -> Settings -> API Keys): enter it in Setup (stored
+# encrypted, only ever sent to this base_url's host), or set in .env:
 #   ABS_TOKEN=
 
 # Where atlas-api reaches ABS. `audiobookshelf:80` works when Atlas joins the

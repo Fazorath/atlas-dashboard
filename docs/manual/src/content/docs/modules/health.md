@@ -62,10 +62,12 @@ Then in Atlas:
    redirect_uri: https://atlas.example.com/api/sleep/oauth/callback
    ```
 
-8. Add `google_health` to `modules:` in `config/atlas.yaml` and `docker compose up -d atlas-api`.
+8. Add `google_health` to `modules:` in `config/atlas.yaml` and `docker compose up -d`.
 9. Open the **Status** screen (avatar menu) and press **Connect Fitbit**. Sign in with Google and allow all three scopes.
 
 The first sync after connecting backfills 90 days.
+
+If you looked around with the [demo data](/start/demo-data/) first, that still holds: the backfill window ignores the made-up nights, so the first real sync pulls the full 90 days. The made-up nights stay in the archive next to the real ones until you wipe them with `python -m app.demo --force` (or clear the tables). The Connect banner only says your 90 days are in once a real night is archived.
 
 ### No HTTPS address?
 

@@ -26,7 +26,7 @@ import asyncio
 import base64
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -57,6 +57,16 @@ UNCATEGORISED = "Uncategorised"
 class _Token:
     value: str
     expires_at: datetime
+    #: (base URL, email, password) it was minted for. Setup can change any of
+    #: them while Atlas runs; a token must never follow the URL to a new host.
+    account: tuple[str, str, str] = ("", "", "")
+
+    def usable_for(self, account: tuple[str, str, str]) -> bool:
+        return self.account == account and self.expires_at > datetime.now(UTC)
+
+
+def _account() -> tuple[str, str, str]:
+    return (settings.securo_base_url, settings.securo_email, settings.securo_password)
 
 
 # One process, one token. The lock keeps a cold start with several cards
@@ -211,7 +221,7 @@ def _reason(response: httpx.Response) -> str:
         detail = response.text[:200]
 
     if detail == "LOGIN_BAD_CREDENTIALS":
-        return "SECURO_EMAIL or SECURO_PASSWORD is wrong"
+        return "Securo rejected the email or password"
     if isinstance(detail, str) and detail:
         return detail
     return str(detail) if detail else response.text[:200]
@@ -235,10 +245,15 @@ def _expiry(token: str) -> datetime:
         return datetime.now(UTC) + FALLBACK_LIFETIME
 
 
-async def _login(client: httpx.AsyncClient) -> _Token:
+async def _login(
+    client: httpx.AsyncClient, email: str | None = None, password: str | None = None
+) -> _Token:
     response = await client.post(
         "/api/auth/login",
-        data={"username": settings.securo_email, "password": settings.securo_password},
+        data={
+            "username": settings.securo_email if email is None else email,
+            "password": settings.securo_password if password is None else password,
+        },
     )
 
     if response.status_code >= 400:
@@ -265,18 +280,18 @@ async def _login(client: httpx.AsyncClient) -> _Token:
 async def _bearer(client: httpx.AsyncClient) -> str:
     global _token_cache
 
-    now = datetime.now(UTC)
+    account = _account()
     cached = _token_cache
-    if cached and cached.expires_at > now:
+    if cached and cached.usable_for(account):
         return cached.value
 
     async with _token_lock:
         # Re-read inside the lock: whoever held it may have just logged in.
         cached = _token_cache
-        if cached and cached.expires_at > datetime.now(UTC):
+        if cached and cached.usable_for(account):
             return cached.value
 
-        token = await _login(client)
+        token = replace(await _login(client), account=account)
         _token_cache = token
         log.info("securo: logged in, token good until %s", token.expires_at.isoformat())
         return token.value
@@ -561,6 +576,20 @@ async def fetch_daily_out(start: date, end: date) -> list[DayOut]:
             if len(batch) < PAGE_LIMIT or len(items) >= int(payload.get("total") or 0):
                 break
     return parse_daily_out(items, start, end)
+
+
+async def probe(base_url: str, email: str, password: str, workspace_id: str = "") -> MoneySnapshot:
+    """Setup's Test: log in with these values and read the summary, touching
+    neither the cached token nor anything saved."""
+    async with httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=TIMEOUT) as client:
+        token = await _login(client, email, password)
+        headers = {"Authorization": f"Bearer {token.value}"}
+        if workspace_id:
+            headers["X-Workspace-Id"] = workspace_id
+        response = await client.get("/api/dashboard/summary", headers=headers)
+    if response.status_code >= 400:
+        raise RuntimeError(f"Securo summary {response.status_code}: {_reason(response)}")
+    return parse_snapshot(response.json() or {}, datetime.now(UTC))
 
 
 async def check_securo(session: AsyncSession) -> int:

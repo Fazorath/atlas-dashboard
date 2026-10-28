@@ -1,6 +1,6 @@
 # School — assignments and class sessions from Canvas's calendar feed.
 # Canvas -> Calendar -> Calendar Feed gives a URL that carries its own token,
-# so it is a secret and goes in .env:
+# so it is a secret: enter it in Setup (stored encrypted), or set in .env:
 #   CANVAS_ICS_URL=
 
 # Optional short names for long course titles. Each key is matched anywhere in
@@ -9,3 +9,17 @@
 course_labels:
   CS101: Intro CS
   Calculus II: Calc II
+
+# Optional rules for the Study plan widget: when study may fall and how long an
+# assignment takes. Hours are whole numbers; everything else is minutes except
+# buffer (hours before the due time to be done by). These are the defaults.
+# study:
+#   earliest: 8
+#   latest: 22
+#   max_block: 90
+#   min_block: 30
+#   gap: 15            # kept clear around a shift or class, and between blocks
+#   buffer: 2
+#   days_off: []       # e.g. [sun] or [fri-sat]
+#   effort:            # title words -> minutes, checked before the built-in guesses
+#     reading: 30

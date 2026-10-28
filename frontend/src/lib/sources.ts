@@ -32,8 +32,11 @@ export const SOURCE_LABEL: Record<string, string> = {
   sleep: "Google Health",
 };
 
+/** Custom modules' names, by Status entry (`custom:<id>`); lib/custom fills it. */
+export const CUSTOM_LABEL: Record<string, string> = {};
+
 export function sourceLabel(name: string): string {
-  return SOURCE_LABEL[name] ?? name;
+  return SOURCE_LABEL[name] ?? CUSTOM_LABEL[name] ?? name;
 }
 
 export interface Sources {
@@ -145,27 +148,4 @@ export function freshnessTone(status: SourceStatus): "live" | "setup" | "error" 
   return "live";
 }
 
-/** What a card shows, given the Sources strip's view and the card's own read.
-
-    The card's response body is current and the strip's last run may be an
-    hour old, so the body wins wherever they disagree. The two kinds of source
-    differ only once everything has answered:
-
-    - `archive` (weather, school, sleep): a failed *sync* keeps the last good
-      data on screen under the strip's error, so the strip's state passes
-      through. Only a failed read of Atlas's own API has nothing to show.
-    - `live` (finance, listening): the last reachability probe can be fifteen
-      minutes old, and a probe that failed while the upstream restarted must
-      not hold a working card in the error state — an answered read is ready. */
-export function cardState(
-  sourceState: SourceState,
-  query: { data?: { configured: boolean }; isPending: boolean; isError: boolean },
-  kind: "archive" | "live",
-): SourceState {
-  if (query.data && !query.data.configured) return "setup";
-  if (sourceState === "setup" || sourceState === "idle") return sourceState;
-  if (query.isPending) return "loading";
-  if (query.isError) return "error";
-  if (kind === "live") return "ready";
-  return sourceState === "loading" ? "ready" : sourceState;
-}
+export { cardState } from "@/lib/card-state";

@@ -211,7 +211,8 @@ def _work(today: date) -> list:
 
 async def seed(force: bool) -> int:
     if not settings.demo:
-        print("Refusing: add `demo: true` to config/atlas.yaml first (see README, Demo data).")
+        print("Refusing: add `demo: true` to config/atlas.yaml first. See "
+              "https://fazorath.github.io/atlas-dashboard/start/demo-data/")
         return 1
 
     async with SessionLocal() as session:

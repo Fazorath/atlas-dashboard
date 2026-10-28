@@ -37,6 +37,10 @@ services:
   atlas-api:
     build:
       context: ./backend
+      args:
+        # true adds reading a Week from a Schedule photo (needs an Ollama
+        # vision model, see config.example/modules/work.yaml).
+        WITH_VISION: ${WITH_VISION:-false}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     environment:
       # The api builds its DB URL from these, escaped (app/config.py), so the
@@ -47,8 +51,11 @@ services:
       TZ: ${TZ:-America/New_York}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       ATLAS_CONFIG_DIR: /config
-      # Secrets only — every other setting lives in config/. Unset is fine:
-      # each module reports "needs setup" rather than failing.
+      # Required: seals the secrets you enter in Setup and signs the Owner's
+      # unlock cookie. The API refuses to start without it (.env.example).
+      ATLAS_SECRET_KEY: ${ATLAS_SECRET_KEY:-}
+      # Optional: a secret set here wins over one entered in Setup, which then
+      # shows it as "Set in .env". Every other setting lives in config/.
       SECURO_EMAIL: ${SECURO_EMAIL:-}
       SECURO_PASSWORD: ${SECURO_PASSWORD:-}
       ABS_TOKEN: ${ABS_TOKEN:-}
@@ -61,7 +68,8 @@ services:
       GOOGLE_OAUTH_REVOKE_URL: ${GOOGLE_OAUTH_REVOKE_URL:-https://oauth2.googleapis.com/revoke}
       GOOGLE_HEALTH_BASE_URL: ${GOOGLE_HEALTH_BASE_URL:-https://health.googleapis.com}
     volumes:
-      - ./config:/config:ro
+      # Read-write: Setup writes these files (ADR 0008), owned like the folder.
+      - ./config:/config
     depends_on:
       atlas-db:
         condition: service_healthy

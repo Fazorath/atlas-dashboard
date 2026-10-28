@@ -6,18 +6,27 @@
 import { Check } from "lucide-react";
 
 import { SegmentMeter } from "@/components/ui/segment-meter";
+import { currentTimezone } from "@/lib/config";
+import { parseLocalDate, todayStart, zonedDate } from "@/lib/habits";
+import { addDaysTo, hourInZone, mondayOnOrBefore } from "@/lib/today";
 import {
+  dayLabel,
   daysFromToday,
   groupByDay,
   untilLabel,
   usePastAssignments,
   useSchool,
+  useStudyPlan,
   useToggleAssignment,
+  zonedDay,
   type Assignment,
   type ClassSession,
+  type StudyBlock,
+  type StudyShort,
 } from "@/lib/school";
 import { cardState, SOURCE, useSources } from "@/lib/sources";
 import { cn } from "@/lib/utils";
+import { compactRange, compactTime, localHHMM, useNow } from "@/lib/work";
 import { R, WidgetCard, type Problem } from "@/widgets/frame";
 import type { BoardKey, WidgetDef, WidgetProps } from "@/widgets/types";
 
@@ -36,12 +45,12 @@ function shortDay(iso: string): string {
   if (d < 0) return "Late";
   if (d === 0) return "Today";
   if (d === 1) return "Tmrw";
-  return new Date(iso).toLocaleDateString(undefined, { weekday: "short" });
+  return zonedDay(iso, { weekday: "short" });
 }
 
 function weekRange(): string {
-  const start = new Date();
-  const end = new Date();
+  const start = todayStart();
+  const end = new Date(start);
   end.setDate(start.getDate() + 6);
   const md = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   return `${md(start)} – ${end.getDate()}`;
@@ -92,15 +101,21 @@ function DueSoon({ size }: WidgetProps) {
           <AllDone total={total} />
         )
       ) : (
-        <WeekList open={open} onToggle={(uid) => toggle.mutate(uid)} done={done} total={total} />
+        <WeekList
+          open={open}
+          finished={data ? data.upcoming.filter((a) => a.done) : []}
+          onToggle={(uid) => toggle.mutate(uid)}
+          done={done}
+          total={total}
+        />
       )}
     </WidgetCard>
   );
 }
 
-function AllDone({ total }: { total: number }) {
+function AllDone({ total, className = "mt-auto" }: { total: number; className?: string }) {
   return (
-    <div className="mt-auto">
+    <div className={className}>
       <p className="text-[15px] font-medium">All done.</p>
       <p className="text-[13px] text-fg-muted">
         {total} {total === 1 ? "assignment" : "assignments"} this week, every one ticked.
@@ -111,16 +126,18 @@ function AllDone({ total }: { total: number }) {
 
 function WeekList({
   open,
+  finished,
   onToggle,
   done,
   total,
 }: {
   open: Assignment[];
+  finished: Assignment[];
   onToggle: (uid: string) => void;
   done: number;
   total: number;
 }) {
-  if (open.length === 0) return <AllDone total={total} />;
+  const allDone = open.length === 0;
   const groups = [
     { label: "Today", rows: open.filter((a) => daysFromToday(a.due_at) <= 0) },
     { label: "Tomorrow", rows: open.filter((a) => daysFromToday(a.due_at) === 1) },
@@ -130,6 +147,16 @@ function WeekList({
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden">
+        {allDone ? (
+          <>
+            <AllDone total={total} className="" />
+            <ul className="flex min-h-0 flex-col overflow-y-auto opacity-60">
+              {finished.map((a) => (
+                <TickRow key={a.ics_uid} a={a} onToggle={() => onToggle(a.ics_uid)} />
+              ))}
+            </ul>
+          </>
+        ) : null}
         {groups.map((g) => (
           <section key={g.label} className="flex flex-col">
             <h3 className="label-caps text-fg-dim">{g.label}</h3>
@@ -220,8 +247,8 @@ function ClassBody({ c, size }: { c: ClassSession; size: WidgetProps["size"] }) 
   const day =
     c.in_progress || days === 0
       ? "Today"
-      : new Date(c.start_at).toLocaleDateString(undefined, { weekday: "short" });
-  const date = new Date(c.start_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      : zonedDay(c.start_at, { weekday: "short" });
+  const date = zonedDay(c.start_at, { month: "short", day: "numeric" });
 
   if (size === "S") {
     return (
@@ -333,15 +360,17 @@ function ComingUp({ size }: WidgetProps) {
 const PAST_DAYS = 14;
 
 /** The last two weeks, each done or missed — the part of the term Canvas's
- *  own feed has already forgotten. A tick here still counts: done late is
- *  done. XL adds a per-course tally and splits the list by week. */
+ *  own feed has already forgotten. A tick moves an Assignment here at once,
+ *  even one not due yet, and a tick here still counts: done late is done.
+ *  XL adds a per-course tally and splits the list by week. */
 function PastAssignments({ size }: WidgetProps) {
   const { state } = useCanvas();
   const past = usePastAssignments(PAST_DAYS);
   const toggle = useToggleAssignment();
-  const items = [...(past.data ?? [])].sort((a, b) => b.due_at.localeCompare(a.due_at));
+  // Newest first by when each left the to-do list: the server's order.
+  const items = past.data ?? [];
   const done = items.filter((a) => a.done).length;
-  const missed = items.length - done;
+  const missed = items.filter((a) => a.overdue).length;
   const pastState = state === "ready" && past.isPending ? "loading" : state === "ready" && past.isError ? "error" : state;
 
   const row = (a: Assignment) => <PastRow key={a.ics_uid} a={a} onToggle={() => toggle.mutate(a.ics_uid)} />;
@@ -357,8 +386,8 @@ function PastAssignments({ size }: WidgetProps) {
         items.length
           ? null
           : {
-              title: "Nothing was due in the last 2 weeks",
-              text: "Past assignments appear here once their due date passes, marked done or missed.",
+              title: "Nothing done or due in the last 2 weeks",
+              text: "Past assignments appear here once you tick them or their due date passes.",
             }
       }
       aside={size === "XL" ? pastRange() : `${done}/${items.length} done · 2 wk`}
@@ -406,8 +435,8 @@ function PastAssignments({ size }: WidgetProps) {
 const monthDay = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
 function pastRange(): string {
-  const end = new Date();
-  const start = new Date();
+  const end = todayStart();
+  const start = new Date(end);
   start.setDate(end.getDate() - (PAST_DAYS - 1));
   return `${monthDay(start)} – ${monthDay(end)}`;
 }
@@ -424,22 +453,29 @@ function courseTally(items: Assignment[]) {
   return [...tally.values()].sort((a, b) => a.course.localeCompare(b.course));
 }
 
-/** This calendar week (Monday first) and the one before. */
+/** When an Assignment left the to-do list: its tick if that beat the due
+ *  time, else the due time — what /school/past orders by. */
+function leftAt(a: Assignment): Date {
+  const due = new Date(a.due_at);
+  const done = a.done_at ? new Date(a.done_at) : null;
+  return done && done < due ? done : due;
+}
+
+/** This calendar week (Monday first) and the one before, by `leftAt`. Weeks
+ *  and the instants in them are all read as calendar days in the configured
+ *  zone, so the boundary doesn't shift with the device's zone. */
 function byWeek(items: Assignment[]) {
-  const monday = new Date();
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  const lastMonday = new Date(monday);
-  lastMonday.setDate(monday.getDate() - 7);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() - 1);
+  const monday = mondayOnOrBefore(zonedDate());
+  const lastMonday = addDaysTo(monday, -7);
+  const sunday = addDaysTo(monday, -1);
+  const day = (a: Assignment) => zonedDate(leftAt(a));
   return [
-    { label: `This week · since ${monthDay(monday)}`, items: items.filter((a) => new Date(a.due_at) >= monday) },
+    { label: `This week · since ${monthDay(parseLocalDate(monday))}`, items: items.filter((a) => day(a) >= monday) },
     {
-      label: `Last week · ${monthDay(lastMonday)} – ${monthDay(sunday)}`,
-      items: items.filter((a) => new Date(a.due_at) < monday && new Date(a.due_at) >= lastMonday),
+      label: `Last week · ${monthDay(parseLocalDate(lastMonday))} – ${monthDay(parseLocalDate(sunday))}`,
+      items: items.filter((a) => day(a) < monday && day(a) >= lastMonday),
     },
-    { label: "Earlier", items: items.filter((a) => new Date(a.due_at) < lastMonday) },
+    { label: "Earlier", items: items.filter((a) => day(a) < lastMonday) },
   ].filter((w) => w.items.length > 0);
 }
 
@@ -472,9 +508,130 @@ function PastRow({ a, onToggle }: { a: Assignment; onToggle: () => void }) {
           {a.course}
         </span>
       ) : null}
-      {a.done ? null : <span className={cn(R.t, "ml-2 shrink-0 text-accent")}>missed</span>}
+      {/* Unticked but not due yet is on its way back to the to-do list. */}
+      {a.overdue ? <span className={cn(R.t, "ml-2 shrink-0 text-accent")}>missed</span> : null}
     </li>
   );
+}
+
+/* --- Study plan ---------------------------------------------------------- */
+
+const PLAN_DAYS = 7;
+
+/** "Tonight" from 5pm on today, else the usual day word. */
+function blockDay(iso: string): string {
+  return daysFromToday(iso) === 0 && hourInZone(currentTimezone(), new Date(iso)) >= 17 ? "Tonight" : dayLabel(iso);
+}
+
+function blockTime(b: StudyBlock, now: Date): string {
+  if (new Date(b.start_at) <= now) return `Now–${compactTime(localHHMM(b.end_at))}`;
+  return compactRange(localHHMM(b.start_at), localHHMM(b.end_at));
+}
+
+/** Study blocks for what's due in the next week, in the free time around
+ *  Class sessions and Shifts. Suggestions only: nothing here is ticked —
+ *  ticking the assignment is what clears its blocks. */
+function StudyPlanWidget({ size }: WidgetProps) {
+  const sources = useSources();
+  const study = useStudyPlan(PLAN_DAYS);
+  const state = cardState(sources.stateOf(SOURCE.school), study, "archive");
+  const now = useNow();
+  const data = study.data?.configured ? study.data : null;
+  const blocks = data?.blocks ?? [];
+  const short = data?.short ?? [];
+  const next = blocks[0];
+
+  return (
+    <WidgetCard
+      title="Study plan"
+      area="school"
+      state={state}
+      problem={PROBLEM}
+      setup={SETUP}
+      empty={
+        data && blocks.length === 0 && short.length === 0
+          ? { title: "Nothing to plan", text: `No open assignments due in the next ${PLAN_DAYS} days.` }
+          : null
+      }
+      aside={blocks.length ? `${blocks.length} ${blocks.length === 1 ? "block" : "blocks"} · ${PLAN_DAYS} days` : null}
+    >
+      {size === "M" ? (
+        next ? (
+          <div className="mt-auto min-w-0">
+            <p className="flex items-baseline gap-3">
+              <span className={R.s}>{blockTime(next, now)}</span>
+              <span className={cn("text-[14px]", daysFromToday(next.start_at) === 0 ? "text-accent" : "text-fg-muted")}>
+                {blockDay(next.start_at)}
+              </span>
+            </p>
+            <p className="mt-2 truncate text-[14px] font-medium">{next.title}</p>
+            <p className={cn(R.t, "truncate text-fg-muted")}>
+              {[next.course, `due ${shortDay(next.due_at)}`].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+        ) : (
+          <ShortNote short={short} />
+        )
+      ) : (
+        <>
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain">
+            {byBlockDay(blocks).map((day) => (
+              <section key={day.key} className="flex flex-col pb-1">
+                <h3 className="label-caps text-fg-dim">{day.label}</h3>
+                <ul className="flex flex-col">
+                  {day.blocks.map((b) => (
+                    <li key={b.start_at} className="flex min-w-0 items-baseline gap-3 py-1">
+                      <span className={cn(R.t, "w-[72px] shrink-0", new Date(b.start_at) <= now ? "text-accent" : "text-fg-muted")}>
+                        {blockTime(b, now)}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[14px] leading-tight font-medium">{b.title}</span>
+                      {b.course ? <span className={cn(R.t, "shrink-0 text-fg-muted")}>{b.course}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+          <ShortNote short={short} />
+          {data?.unentered_weeks.length ? (
+            <p className="text-[12px] leading-snug text-fg-muted">
+              {data.unentered_weeks.length === 1 ? "A Week isn't" : "Weeks aren't"} entered in Work, so their Shifts
+              aren't planned around.
+            </p>
+          ) : null}
+        </>
+      )}
+    </WidgetCard>
+  );
+}
+
+/** "Not enough time for Final paper (1h 30m short)" — one line, the soonest. */
+function ShortNote({ short }: { short: StudyShort[] }) {
+  if (!short.length) return null;
+  const first = short[0];
+  const more = short.length - 1;
+  return (
+    <p className="mt-auto truncate text-[12px] leading-snug text-accent">
+      Not enough free time for {first.title}
+      <span className="tnum"> ({durationLabel(first.minutes)} short)</span>
+      {more ? ` and ${more} more` : ""}
+    </p>
+  );
+}
+
+function durationLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+}
+
+function byBlockDay(blocks: StudyBlock[]) {
+  const days = new Map<string, StudyBlock[]>();
+  for (const b of blocks) {
+    const key = zonedDate(new Date(b.start_at));
+    days.set(key, [...(days.get(key) ?? []), b]);
+  }
+  return [...days.entries()].map(([key, rows]) => ({ key, label: blockDay(rows[0].start_at), blocks: rows }));
 }
 
 export const SCHOOL_WIDGETS: WidgetDef[] = [
@@ -488,6 +645,7 @@ export const SCHOOL_WIDGETS: WidgetDef[] = [
     render: NextClass,
     useAbsent: useNextClassAbsent,
   },
+  { id: "canvas.study", title: "Study plan", area: "school", sizes: ["M", "L"], placement: "anywhere", render: StudyPlanWidget },
   { id: "canvas.coming_up", title: "Coming up", area: "school", sizes: ["L", "XL"], placement: "area", render: ComingUp },
   {
     id: "canvas.past_assignments",

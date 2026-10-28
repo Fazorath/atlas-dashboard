@@ -29,7 +29,7 @@ class Habit(TimestampMixin, Base):
     icon: Mapped[str | None] = mapped_column(String(16), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Null while active. Archiving hides the habit from today's list but keeps
-    # its entries, so the heatmap still remembers the months it was tracked.
+    # its entries, so its history still remembers the months it was tracked.
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # A Measured habit (ADR 0001): the Health figure it reads — a key of
     # `app.measured.METRICS` — and the target that figure has to reach. Both

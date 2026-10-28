@@ -1,0 +1,18 @@
+# Work — weekly shifts. Nothing to set to use it: you type each week in.
+
+# Optional: fill a week from a photo of a printed staff schedule (one row per
+# person, one column per weekday). Needs the API built with WITH_VISION=true
+# in .env and a vision model on Ollama (e.g. `ollama pull gemma3:4b`). The
+# photo is read on your own machine and never stored. Leave this out to keep
+# the feature off.
+#
+# photo:
+#   ollama_url: http://ollama:11434   # where atlas-api reaches Ollama
+#   model: gemma3:4b
+#   name: Sam                          # your name exactly as printed on the schedule
+#   close:                             # what "C" (close) means, per weekday
+#     mon-thu: "20:30"
+#     fri-sat: "23:00"
+#     sun: "19:00"
+#   morning_from: 7                    # a start of 7-11 is am; 1-6 is pm
+#   date_format: md                    # how dates are written on the paper: md = 10/26, dm = 26/10

@@ -188,7 +188,7 @@ def _reason(response: httpx.Response) -> str:
     read as though the server were broken rather than the key wrong.
     """
     if response.status_code in (401, 403):
-        return "ABS_TOKEN was rejected — re-mint the key in Audiobookshelf under Settings, API Keys"
+        return "Audiobookshelf rejected the API key — make a new one under Settings, API Keys"
     body = response.text.strip()
     return body[:200] if body else response.reason_phrase or "no response body"
 
@@ -387,6 +387,18 @@ async def fetch_cover(item_id: str, width: int = COVER_WIDTH) -> tuple[bytes, st
             )
         content_type = response.headers.get("content-type", "image/jpeg")
         return response.content, content_type
+
+
+async def probe(base_url: str, token: str) -> int:
+    """Setup's Test: who the key belongs to and how many books are in progress,
+    with these values rather than the saved ones."""
+    async with httpx.AsyncClient(
+        base_url=base_url.rstrip("/"),
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=TIMEOUT,
+    ) as client:
+        me = await _get(client, "/api/me")
+    return sum(1 for p in me.get("mediaProgress") or [] if not p.get("isFinished"))
 
 
 async def check_audiobookshelf(session: AsyncSession) -> int:

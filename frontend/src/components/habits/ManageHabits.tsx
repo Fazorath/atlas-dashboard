@@ -1,5 +1,5 @@
 /* Manage habits: the sheet behind the Habits header's Manage button. Adding,
-   renaming, archiving and restoring live here, and so does the Measured
+   renaming, setting a Habit icon, archiving and restoring live here, and so does the Measured
    link (ADR 0001): a Habit tied to a Health figure and a target, which Atlas
    ticks when that day's data arrives. Ticking stays on the Board's Widgets. */
 
@@ -10,6 +10,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
+import { firstGrapheme } from "@/lib/habit-icon";
 import {
   useCreateHabit,
   useHabits,
@@ -23,6 +24,33 @@ import { habitAccent } from "@/lib/sections";
 const inputClass =
   "h-11 min-w-0 flex-1 rounded-[16px] bg-surface-2 px-4 text-[15px] font-semibold text-fg " +
   "placeholder:text-fg-dim outline-none focus-visible:ring-2 focus-visible:ring-accent";
+
+/** One emoji or character, shown in place of the Habit's first letter. The
+    first letter is the placeholder, so an empty square previews the default.
+    On a phone the system keyboard's emoji page does the picking. */
+function IconSquare({
+  value,
+  onChange,
+  name,
+  label,
+  ...rest
+}: { value: string; onChange: (icon: string) => void; name: string; label: string } & Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "value" | "onChange" | "name"
+>) {
+  return (
+    <input
+      {...rest}
+      value={value}
+      onChange={(e) => onChange(firstGrapheme(e.target.value))}
+      placeholder={name.trim().slice(0, 1)}
+      aria-label={label}
+      autoComplete="off"
+      enterKeyHint="done"
+      className="size-11 shrink-0 rounded-[16px] bg-surface-2 text-center text-[20px] text-fg placeholder:text-[15px] placeholder:font-semibold placeholder:text-fg-dim outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    />
+  );
+}
 
 export function ManageHabits({ onClose }: { onClose: () => void }) {
   const habits = useHabits();
@@ -59,19 +87,29 @@ export function ManageHabits({ onClose }: { onClose: () => void }) {
 
 function AddHabit() {
   const [name, setName] = useState("");
+  const [icon, setIcon] = useState("");
   const create = useCreateHabit();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    create.mutate({ name: trimmed }, { onSuccess: () => setName("") });
+    create.mutate(
+      { name: trimmed, ...(icon ? { icon } : {}) },
+      {
+        onSuccess: () => {
+          setName("");
+          setIcon("");
+        },
+      },
+    );
   };
 
   return (
     <section className="flex flex-col gap-2.5" aria-label="New habit">
       <h3 className="label-caps text-fg-muted">New habit</h3>
       <form onSubmit={submit} className="flex items-center gap-2">
+        <IconSquare value={icon} onChange={setIcon} name={name || "Read 20 pages"} label="Icon for the new habit" />
         <input
           value={name}
           maxLength={80}
@@ -91,11 +129,17 @@ function AddHabit() {
   );
 }
 
-/** Rename saves on Enter or blur; archive hides the habit but keeps its ticks.
-    The second line links it to a Health figure — or unlinks it. */
+/** Icon and rename save on Enter or blur; archive hides the habit but keeps
+    its ticks. The second line links it to a Health figure — or unlinks it. */
 function EditRow({ habit, index }: { habit: Habit; index: number }) {
   const [name, setName] = useState(habit.name);
+  const [icon, setIcon] = useState(habit.icon ?? "");
   const update = useUpdateHabit();
+
+  const saveIcon = () => {
+    if (icon === (habit.icon ?? "")) return;
+    update.mutate({ id: habit.id, icon: icon || null }, { onError: () => setIcon(habit.icon ?? "") });
+  };
 
   const save = () => {
     const trimmed = name.trim();
@@ -106,6 +150,14 @@ function EditRow({ habit, index }: { habit: Habit; index: number }) {
   return (
     <div data-accent={habitAccent(index)} className="flex w-full flex-col gap-2 rounded-row bg-surface px-3.5 py-3">
       <div className="flex items-center gap-2">
+        <IconSquare
+          value={icon}
+          onChange={setIcon}
+          name={habit.name}
+          label={`Icon for ${habit.name}`}
+          onBlur={saveIcon}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        />
         <input
           value={name}
           maxLength={80}

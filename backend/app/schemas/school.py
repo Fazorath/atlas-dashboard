@@ -5,7 +5,7 @@ Canvas published only a date (anything due at 11:59pm) — `due_at` is then 23:5
 local, and the UI should say "end of day" rather than quote a time.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -58,3 +58,37 @@ class SchoolSummary(BaseModel):
     classes: list[ClassOut] = []
     #: When the feed last listed anything. Freshness, not a sync-run time.
     fetched_at: datetime | None = None
+
+
+class StudyBlockOut(BaseModel):
+    """A suggested Study block for one Assignment. Worked out on read, never
+    stored or ticked: ticking the assignment is what makes its blocks go."""
+
+    ics_uid: str
+    title: str
+    course: str | None
+    start_at: datetime
+    end_at: datetime
+    due_at: datetime
+
+
+class StudyShortOut(BaseModel):
+    """An Assignment the free time before its due time can't cover."""
+
+    ics_uid: str
+    title: str
+    course: str | None
+    due_at: datetime
+    #: Minutes of its guessed effort that found no room.
+    minutes: int
+
+
+class StudyPlan(BaseModel):
+    configured: bool
+    detail: str | None = None
+    #: Soonest first.
+    blocks: list[StudyBlockOut] = []
+    short: list[StudyShortOut] = []
+    #: Mondays of Work weeks in the window nobody has entered, so their Shifts
+    #: are unknown and a block may land on one. Empty when Work is off.
+    unentered_weeks: list[date] = []

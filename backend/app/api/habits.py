@@ -27,8 +27,8 @@ from app.schemas.habits import HabitDay, HabitIn, HabitOut, HabitPatch, HistoryD
 
 router = APIRouter(prefix="/habits", tags=["habits"])
 
-# Longest heatmap the detail page may ask for: a year, plus the partial week
-# that aligns its first column to a Monday.
+# Longest history a client may ask for: a year, plus the partial week that
+# lines its start up on a Monday.
 MAX_HISTORY_DAYS = 371
 
 # One statement for the day view. `began` is the earlier of creation and the
@@ -214,7 +214,7 @@ async def habits_history(
     days: int = Query(119, ge=1, le=MAX_HISTORY_DAYS),
     session: AsyncSession = Depends(get_session),
 ) -> list[HistoryDay]:
-    """Per-day done/total for the last `days` days, oldest first — the heatmap."""
+    """Per-day done/total for the last `days` days, oldest first — the This week strip's dots."""
     today = local_today()
     result = await session.execute(
         _HISTORY_SQL,
@@ -275,6 +275,7 @@ async def update_habit(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 f"unknown metric {metric!r}; known: {sorted(METRICS)}",
             )
+        switched = metric != habit.metric
         habit.metric = metric
         if metric is None:
             habit.target = None
@@ -283,7 +284,9 @@ async def update_habit(
             await session.execute(
                 delete(HabitEntry).where(HabitEntry.habit_id == habit_id, ~HabitEntry.done)
             )
-        elif "target" not in changes and habit.target is None:
+        elif "target" not in changes and (switched or habit.target is None):
+            # A target means something only for the figure it was set against
+            # (10000 steps is not 10000 hours of sleep).
             habit.target = METRICS[metric].default_target
     if "target" in changes and habit.metric is not None:
         if changes["target"] is None:

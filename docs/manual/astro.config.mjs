@@ -65,6 +65,7 @@ export default defineConfig({
 						{ label: 'Today', slug: 'using/today' },
 						{ label: 'Boards & Widgets', slug: 'using/boards-and-widgets' },
 						{ label: 'Sync & freshness', slug: 'using/sync-and-freshness' },
+						{ label: 'Notifications', slug: 'using/notifications' },
 					],
 				},
 				{

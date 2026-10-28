@@ -1,15 +1,19 @@
 /* Work — the seam for /api/work, and how a shift reads.
 
-   Days are local YYYY-MM-DD and times local "HH:MM" on that day, as the schedule
+   Days are local YYYY-MM-DD and times local "HH:MM" on that day, as a
    schedule has them; shifts never cross midnight. A week someone saved is
    *entered*: an empty day in it is a day off. A week nobody saved is unknown,
    and the widgets say "not entered" rather than "off". */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
+import { currentTimezone, workPhotoEnabled } from "@/lib/config";
 import { localDate, parseLocalDate } from "@/lib/habits";
+import { pollInterval, shrink } from "@/lib/photo";
+import { latestSendFailure } from "@/lib/send-failure";
+import { entryForToday } from "@/lib/today";
 
 export interface Shift {
   date: string;
@@ -61,8 +65,11 @@ export function useWeek(start: string) {
 export function useSaveWeek() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ start, shifts }: { start: string; shifts: ShiftIn[] }) =>
-      api<Week>(`/work/weeks/${start}`, { method: "PUT", body: JSON.stringify({ shifts }) }),
+    mutationFn: ({ start, shifts, draftId }: { start: string; shifts: ShiftIn[]; draftId?: number | null }) =>
+      api<Week>(`/work/weeks/${start}`, {
+        method: "PUT",
+        body: JSON.stringify({ shifts, draft_id: draftId ?? null }),
+      }),
     onSuccess: () => client.invalidateQueries({ queryKey: WORK_KEY }),
   });
 }
@@ -72,6 +79,99 @@ export function useClearWeek() {
   return useMutation({
     mutationFn: (start: string) => api<void>(`/work/weeks/${start}`, { method: "DELETE" }),
     onSuccess: () => client.invalidateQueries({ queryKey: WORK_KEY }),
+  });
+}
+
+/* --- Schedule photo (ADR 0006) ---------------------------------------------
+   POST the photo and walk away: the API reads it in the background into a
+   Draft week, which counts for nothing until the week is saved. */
+
+export interface DraftDay {
+  date: string;
+  /** "HH:MM", or null when read as off or not readable. */
+  start: string | null;
+  end: string | null;
+  off: boolean;
+  /** What was copied off the paper, shown beside a day that couldn't be read. */
+  raw: string;
+}
+
+export interface PhotoRead {
+  id: number;
+  status: "reading" | "ready" | "failed";
+  week_start: string | null;
+  /** No dates were read off the paper, so week_start is the week that was open. */
+  week_guessed: boolean;
+  days: DraftDay[] | null;
+  error: string | null;
+  created_at: string;
+}
+
+const PHOTO_KEY = [...WORK_KEY, "photo"] as const;
+
+/** Reads in progress, failures and Draft weeks, newest first. Polls while a
+    photo is being read so the banner flips to "ready" on its own. */
+export function usePhotoReads() {
+  return useQuery({
+    queryKey: PHOTO_KEY,
+    queryFn: () => api<PhotoRead[]>("/work/photo"),
+    enabled: workPhotoEnabled(),
+    refetchInterval: (q) => pollInterval(q.state.data),
+  });
+}
+
+export function draftFor(reads: PhotoRead[] | undefined, weekStart: string): PhotoRead | undefined {
+  return reads?.find((r) => r.status === "ready" && r.week_start === weekStart);
+}
+
+const SEND_KEY = [...PHOTO_KEY, "send"] as const;
+// Outside PHOTO_KEY: invalidating the photo queries must not reset a dismissal.
+const DISMISSED_KEY = ["work-photo-send-dismissed"] as const;
+
+/** The newest photo send if it failed, even after the Edit week sheet that
+    started it has closed. `dismiss` waves it off. */
+export function useSendFailure() {
+  const sends = useMutationState({
+    filters: { mutationKey: SEND_KEY },
+    select: (m) => ({ status: m.state.status, submittedAt: m.state.submittedAt, error: m.state.error as Error | null }),
+  });
+  // Held in the query cache, not component state, so a dismissal survives
+  // leaving the Work screen and coming back.
+  const client = useQueryClient();
+  const dismissed = useQuery({
+    queryKey: DISMISSED_KEY,
+    queryFn: () => 0,
+    initialData: 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  const error = latestSendFailure(sends, dismissed.data);
+  const newest = Math.max(0, ...sends.map((x) => x.submittedAt));
+  return { error, dismiss: () => client.setQueryData(DISMISSED_KEY, newest) };
+}
+
+export function useReadPhoto() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: SEND_KEY,
+    // Kept past the sheet closing, so the Work screen can still report it.
+    gcTime: 30 * 60_000,
+    mutationFn: async ({ file, week }: { file: File; week: string }) =>
+      api<PhotoRead>(`/work/photo?week=${week}`, {
+        method: "POST",
+        headers: { "Content-Type": "image/jpeg" },
+        body: await shrink(file),
+      }),
+    onSuccess: () => client.invalidateQueries({ queryKey: PHOTO_KEY }),
+  });
+}
+
+/** Discard a Draft week, or dismiss a failed read. */
+export function useDiscardRead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api<void>(`/work/photo/${id}`, { method: "DELETE" }),
+    onSuccess: () => client.invalidateQueries({ queryKey: PHOTO_KEY }),
   });
 }
 
@@ -132,6 +232,12 @@ export function at(date: string, hhmm: string): Date {
   return d;
 }
 
+/** An instant's local "HH:MM", so the compact helpers below can read it. */
+export function localHHMM(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 /** "9" / "8:30" plus its meridiem, "a" or "p". */
 function clock(hhmm: string): { text: string; mer: "a" | "p" } {
   const total = toMinutes(hhmm);
@@ -188,9 +294,9 @@ export type Today =
   | { kind: "off"; next: Shift | null };
 
 export function todayOf(work: WorkSummary, now: Date): Today {
-  const today = localDate(now);
   if (!work.this_week.entered) return { kind: "unknown" };
-  const shift = work.this_week.shifts.find((s) => s.date === today);
+  // Today in the configured zone, not the phone's, so Work and Habits agree.
+  const shift = entryForToday(work.this_week.shifts, currentTimezone(), now);
   if (!shift) return { kind: "off", next: work.next_shift };
   const start = at(shift.date, shift.start);
   const end = at(shift.date, shift.end);

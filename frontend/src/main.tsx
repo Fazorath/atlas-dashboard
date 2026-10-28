@@ -22,6 +22,9 @@ const queryClient = new QueryClient({
   },
 });
 
+// The service worker only shows Notifications (ADR 0007); it caches nothing.
+if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js");
+
 // Which modules are on decides the nav and the routes, so it is known first.
 void loadConfig().then(() =>
   createRoot(document.getElementById("root")!).render(

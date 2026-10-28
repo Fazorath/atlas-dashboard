@@ -12,7 +12,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { localDate, parseLocalDate } from "@/lib/habits";
+import { currentTimezone } from "@/lib/config";
+import { parseLocalDate, zonedDate } from "@/lib/habits";
+import { formatDateInZone } from "@/lib/today";
 
 export interface Assignment {
   ics_uid: string;
@@ -140,18 +142,22 @@ export function useToggleAssignment() {
   });
 }
 
+/** Today plus the next six days, by calendar day in the configured zone. */
 function isThisWeek(iso: string): boolean {
-  const start = parseLocalDate(localDate());
-  const end = new Date(start);
-  end.setDate(start.getDate() + 7);
-  const t = new Date(iso).getTime();
-  return t >= start.getTime() && t < end.getTime();
+  const diff = daysFromToday(iso);
+  return diff >= 0 && diff < 7;
+}
+
+/** A date part of the instant `iso`, worded in the configured zone so it
+ *  agrees with `daysFromToday` and `groupByDay`. */
+export function zonedDay(iso: string | Date, options: Intl.DateTimeFormatOptions): string {
+  return formatDateInZone(currentTimezone(), new Date(iso), options);
 }
 
 /** Whole local days from today to the day `iso` falls on. 0 is today. */
 export function daysFromToday(iso: string, now = new Date()): number {
-  const day = parseLocalDate(localDate(new Date(iso)));
-  const today = parseLocalDate(localDate(now));
+  const day = parseLocalDate(zonedDate(new Date(iso)));
+  const today = parseLocalDate(zonedDate(now));
   return Math.round((day.getTime() - today.getTime()) / 86_400_000);
 }
 
@@ -161,9 +167,8 @@ export function dayLabel(iso: string, now = new Date()): string {
   if (diff === 0) return "Today";
   if (diff === 1) return "Tomorrow";
   if (diff === -1) return "Yesterday";
-  const d = new Date(iso);
-  if (diff > 1 && diff < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (diff > 1 && diff < 7) return zonedDay(iso, { weekday: "long" });
+  return zonedDay(iso, { month: "short", day: "numeric" });
 }
 
 /** "11:59 PM", or "End of day" when Canvas gave only a date. */
@@ -207,7 +212,7 @@ export function untilLabel(iso: string, now = new Date()): string | null {
 export function groupByDay(items: Assignment[]): { key: string; label: string; items: Assignment[] }[] {
   const groups = new Map<string, Assignment[]>();
   for (const a of items) {
-    const key = localDate(new Date(a.due_at));
+    const key = zonedDate(new Date(a.due_at));
     groups.set(key, [...(groups.get(key) ?? []), a]);
   }
   return [...groups.entries()].map(([key, rows]) => ({
@@ -215,4 +220,46 @@ export function groupByDay(items: Assignment[]): { key: string; label: string; i
     label: dayLabel(rows[0].due_at),
     items: rows,
   }));
+}
+
+/* --- Study plan ---------------------------------------------------------- */
+
+/** A suggested Study block for one open Assignment. Worked out on every read
+ *  and never stored: ticking the assignment is what makes its blocks go. */
+export interface StudyBlock {
+  ics_uid: string;
+  title: string;
+  course: string | null;
+  start_at: string;
+  end_at: string;
+  due_at: string;
+}
+
+/** An Assignment the free time before its due time can't cover. */
+export interface StudyShort {
+  ics_uid: string;
+  title: string;
+  course: string | null;
+  due_at: string;
+  /** Minutes of its guessed effort that found no room. */
+  minutes: number;
+}
+
+export interface StudyPlan {
+  configured: boolean;
+  detail: string | null;
+  /** Soonest first. */
+  blocks: StudyBlock[];
+  short: StudyShort[];
+  /** Mondays (YYYY-MM-DD) of Work weeks nobody entered: their Shifts are
+   *  unknown, so a block may land on one. */
+  unentered_weeks: string[];
+}
+
+export function useStudyPlan(days = 7) {
+  return useQuery({
+    queryKey: ["school", "study", days],
+    queryFn: () => api<StudyPlan>(`/school/study?days=${days}`),
+    refetchInterval: REFETCH_MS,
+  });
 }

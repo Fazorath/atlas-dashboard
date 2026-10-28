@@ -11,10 +11,19 @@ import { AccountMenu } from "@/components/layout/AccountMenu";
 import { AreaHeader } from "@/components/layout/AreaHeader";
 import { AREAS, type AreaKey } from "@/lib/sections";
 
-export function AreaBoard({ area, actions }: { area: AreaKey; actions?: ReactNode }) {
+export function AreaBoard({
+  area,
+  actions,
+  notice,
+}: {
+  area: AreaKey;
+  actions?: ReactNode;
+  notice?: ReactNode;
+}) {
   return (
     <Board
       board={area}
+      notice={notice}
       leading={<AreaHeader area={AREAS[area]} />}
       trailing={
         <>

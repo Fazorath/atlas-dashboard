@@ -6,13 +6,14 @@ sync plumbing changes.
 """
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.measured import apply_measured
 from app.modules import source_enabled
+from app.notify.run import run_notify
 from app.sources.audiobookshelf import check_audiobookshelf
 from app.sources.canvas import sync_canvas
 from app.sources.google_health import sync_google_health
@@ -38,6 +39,10 @@ class Source:
     hidden: bool = False
 
 
+#: Every Source there is, whether its module is on or not.
+_ALL: dict[str, Source] = {}
+
+#: The Sources whose module is on — what the sync endpoint and Status see.
 SOURCES: dict[str, Source] = {}
 
 #: Sources whose module is switched off in atlas.yaml. Cron still calls them on
@@ -62,12 +67,7 @@ def register(
     live: bool = False,
     hidden: bool = False,
 ) -> None:
-    if not source_enabled(name):
-        DISABLED.add(name)
-        return
-    if settings.demo and name in DEMO_SEEDED:
-        run = _demo_hold
-    SOURCES[name] = Source(
+    _ALL[name] = Source(
         name=name,
         run=run,
         is_configured=is_configured,
@@ -75,6 +75,21 @@ def register(
         live=live,
         hidden=hidden,
     )
+    refresh()
+
+
+def refresh() -> None:
+    """Recompute SOURCES and DISABLED from the current config, in place, so
+    everyone holding them sees a module switched on or off at once."""
+    SOURCES.clear()
+    DISABLED.clear()
+    for name, source in _ALL.items():
+        if not source_enabled(name):
+            DISABLED.add(name)
+        elif settings.demo and name in DEMO_SEEDED:
+            SOURCES[name] = replace(source, run=_demo_hold)
+        else:
+            SOURCES[name] = source
 
 
 async def _noop(session: AsyncSession) -> int:
@@ -149,4 +164,15 @@ register(
     _sync_health,
     is_configured=lambda: settings.google_health_configured,
     description="Fitbit via Google Health, archived to sleep_sessions and daily_activity.",
+)
+
+# Notifications (ADR 0007) ride the same rails: cron calls it every 5 minutes,
+# and each run is a row in sync_runs. Plumbing, so hidden from the Sources list;
+# the Notifications card on Status shows its last run instead. "Rows" is how
+# many notifications went out.
+register(
+    "notify",
+    run_notify,
+    description="Sends due Alerts by Web Push to subscribed devices.",
+    hidden=True,
 )

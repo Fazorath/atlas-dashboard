@@ -14,6 +14,20 @@ RUN python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml
  && pip install --no-cache-dir -r /tmp/requirements.txt \
  && rm /tmp/requirements.txt
 
+# Schedule photos (ADR 0006): off unless built with WITH_VISION=true (or 1/yes/on), so a
+# default install carries no OpenCV or Tesseract.
+ARG WITH_VISION=false
+RUN case "$WITH_VISION" in \
+      [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) with_vision=1 ;; \
+      *) with_vision= ;; \
+    esac; \
+    if [ -n "$with_vision" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends tesseract-ocr \
+      && rm -rf /var/lib/apt/lists/* \
+      && python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['vision']))" > /tmp/vision.txt \
+      && pip install --no-cache-dir -r /tmp/vision.txt && rm /tmp/vision.txt; \
+    fi
+
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app

@@ -28,3 +28,8 @@
 # wake, and a 4am run would leave the card a night behind all day. ~6 calls a
 # run, against a 300/minute per-user quota. Named `sleep`, the dashboard's key.
 40   *  *   *   *    /usr/local/bin/sync.sh sleep
+
+# Notifications (ADR 0007): sends the Alerts that are due. Does nothing until a
+# device turns notifications on in Status. Every 5 minutes, so an Alert lands
+# within 5 minutes of its time.
+*/5  *  *   *   *    /usr/local/bin/sync.sh notify

@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import local_today, local_zone
 from app.config import settings
+from app.sources import Unreachable
 from app.models import WeatherDaily, WeatherObservation
 
 log = logging.getLogger(__name__)
@@ -265,7 +266,7 @@ async def _get_json(
             response = await client.get(url, params=params)
         except httpx.TransportError as exc:
             if delay is None:
-                raise RuntimeError(f"{what} unreachable: {type(exc).__name__}") from None
+                raise Unreachable(f"{what} unreachable: {type(exc).__name__}") from None
             log.info("%s attempt %d: %s; retrying in %ds", what, attempt, exc, delay)
         else:
             if response.status_code not in TRANSIENT or delay is None:
@@ -293,9 +294,12 @@ def _where() -> dict[str, Any]:
     return {"latitude": settings.weather_lat, "longitude": settings.weather_lon}
 
 
-async def fetch_hourly(client: httpx.AsyncClient) -> list[HourlyReading]:
+async def fetch_hourly(
+    client: httpx.AsyncClient, where: dict[str, Any] | None = None
+) -> list[HourlyReading]:
+    """`where` overrides the configured coordinates — Setup's Test passes its own."""
     params = {
-        **_where(),
+        **(where or _where()),
         "hourly": ",".join(HOURLY_FIELDS),
         # UTC in, UTC in the table. Local time is a display concern, and the
         # only place it matters is picking out "today" for the high and low.

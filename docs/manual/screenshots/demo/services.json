@@ -1,0 +1,8 @@
+[
+  {"name": "Jellyfin", "uptime": "42 days", "state": "up"},
+  {"name": "Nextcloud", "uptime": "42 days", "state": "up"},
+  {"name": "Pi-hole", "uptime": "118 days", "state": "up"},
+  {"name": "Vaultwarden", "uptime": "9 days", "state": "up"},
+  {"name": "Immich", "uptime": "3 hours", "state": "slow"},
+  {"name": "Gitea", "uptime": "down 12 min", "state": "down"}
+]

@@ -6,6 +6,7 @@ __pycache__/
 *.py[cod]
 .venv/
 .pytest_cache/
+*.egg-info/
 .ruff_cache/
 
 # node
@@ -23,6 +24,13 @@ npm-debug.log*
 .idea/
 .vscode/
 
-# local setup — copied from the *.example versions
-/config/
+# local setup — written by Setup, or copied from the *.example versions. The
+# committed .gitkeep makes config/ exist on a fresh clone, so Docker never
+# creates it root-owned.
+/config/*
+!/config/.gitkeep
 docker-compose.override.yml
+
+# database dumps hold OAuth tokens; keep them outside the repo (/backups/ was the old recipe's folder)
+/backups/
+*.dump

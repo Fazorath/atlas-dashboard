@@ -42,7 +42,7 @@ The audiobook you're in the middle of, with its cover and how far along you are,
 4. Add `audiobookshelf` to `modules:` in `config/atlas.yaml`, then:
 
    ```bash
-   docker compose up -d atlas-api      # up, not restart: .env changed
+   docker compose up -d                      # up, not restart: .env changed
    curl -s 127.0.0.1:8187/api/listening/ | python3 -m json.tool
    ```
 

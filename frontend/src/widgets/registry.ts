@@ -5,8 +5,10 @@
    so a Widget that is removed, or a Size it stops supporting, can never
    break a Board: the tile is dropped or moved to the nearest Size it has. */
 
-import { areaEnabled } from "@/lib/config";
+import { catchUp } from "@/lib/board-modules";
+import { areaEnabled, enabledModules } from "@/lib/config";
 import { AREAS, type AreaKey } from "@/lib/sections";
+import { customWidgetDefs, onCustomChange } from "@/widgets/custom";
 import { HABITS_WIDGETS } from "@/widgets/habits";
 import { HEALTH_WIDGETS } from "@/widgets/health";
 import { LISTENING_WIDGETS } from "@/widgets/listening";
@@ -16,7 +18,7 @@ import { SIZES, type BoardKey, type Size, type TileSpec, type WidgetDef } from "
 import { WEATHER_WIDGETS } from "@/widgets/weather";
 import { WORK_WIDGETS } from "@/widgets/work";
 
-export const WIDGETS: WidgetDef[] = [
+const FIRST_PARTY: WidgetDef[] = [
   ...HEALTH_WIDGETS,
   ...MONEY_WIDGETS,
   ...SCHOOL_WIDGETS,
@@ -26,7 +28,17 @@ export const WIDGETS: WidgetDef[] = [
   ...WORK_WIDGETS,
 ];
 
+/** The first-party Widgets, then the Custom modules'. Updated in place when
+ *  the Custom modules reload (lib/custom), so readers always see the current set. */
+export const WIDGETS: WidgetDef[] = [...FIRST_PARTY];
+
 export const WIDGET_BY_ID = new Map(WIDGETS.map((w) => [w.id, w]));
+
+onCustomChange(() => {
+  WIDGETS.splice(0, WIDGETS.length, ...FIRST_PARTY, ...customWidgetDefs());
+  WIDGET_BY_ID.clear();
+  WIDGETS.forEach((w) => WIDGET_BY_ID.set(w.id, w));
+});
 
 /** Today takes any Widget not kept to its Area; an Area's Board takes only
  *  its own. A Widget whose module is off in atlas.yaml goes nowhere. */
@@ -60,7 +72,9 @@ export function defaultBoard(board: BoardKey): TileSpec[] {
       return def !== undefined && allowedOn("today", def);
     });
   }
-  return widgetsFor(board as AreaKey).map((w) => ({ widget: w.id, size: w.sizes[w.sizes.length - 1] }));
+  return widgetsFor(board as AreaKey)
+    .filter((w) => !w.galleryOnly)
+    .map((w) => ({ widget: w.id, size: w.sizes[w.sizes.length - 1] }));
 }
 
 /** The supported Size closest to the one asked for, rounding up on a tie. */
@@ -84,6 +98,20 @@ export function resolveLayout(board: BoardKey, saved: TileSpec[] | null | undefi
     seen.add(def.id);
     return [{ widget: def.id, size: nearestSize(def, tile.size) }];
   });
+}
+
+/** A saved Board brought up to date with Modules enabled since it was saved:
+ *  their default Widgets appended once (see lib/board-modules). Never-saved
+ *  Boards (`saved` null) need nothing: their default already has them. */
+export function catchUpBoard(
+  board: BoardKey,
+  saved: TileSpec[] | null | undefined,
+  seen: string[] | null | undefined,
+): { layout: TileSpec[] | null; seen: string[] | null; changed: boolean } {
+  const enabled = enabledModules();
+  if (!saved || !enabled) return { layout: saved ?? null, seen: seen ?? null, changed: false };
+  const r = catchUp(saved, seen ?? null, enabled, defaultBoard(board));
+  return r;
 }
 
 export function boardTitle(board: BoardKey): string {

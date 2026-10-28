@@ -1,10 +1,13 @@
 # Copy to docker-compose.override.yml (compose loads it automatically) when
 # atlas-api has to reach apps in *other* compose stacks by container name —
-# e.g. Securo's `backend` or `audiobookshelf`. Join each stack's network here.
+# e.g. Securo's `backend`, `audiobookshelf`, or `ollama` for schedule photos.
+# Join each stack's network here, and delete the ones you don't use.
 # Find names with `docker network ls`; a stack's default is `<project>_default`.
 #
-# Not needed for weather, habits, work, Canvas or Google Health: those talk to
-# the internet, not to your other containers.
+# Not needed for weather, habits, Canvas or Google Health: those talk to the
+# internet, not to your other containers. Work needs it only for the optional
+# photo reader (the `ollama` network below). `photo.ollama_url` in
+# config/modules/work.yaml must use Ollama's container name on that network.
 
 services:
   atlas-api:
@@ -12,6 +15,7 @@ services:
       - default
       - securo
       - audiobookshelf
+      - ollama     # only for the Work photo reader
 
 networks:
   securo:
@@ -20,3 +24,6 @@ networks:
   audiobookshelf:
     external: true
     name: audiobookshelf_default
+  ollama:  # only for the Work photo reader; where `photo.ollama_url` points
+    external: true
+    name: ollama_default

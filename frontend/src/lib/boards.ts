@@ -12,6 +12,8 @@ import type { BoardKey, TileSpec } from "@/widgets/types";
 interface BoardOut {
   key: string;
   layout: TileSpec[] | null;
+  /** Modules that were on when the layout was last written; null if unknown. */
+  seen_modules?: string[] | null;
   updated_at: string | null;
 }
 
@@ -26,17 +28,31 @@ export function useBoardLayout(key: BoardKey) {
   });
 }
 
+interface SaveArgs {
+  layout: TileSpec[];
+  /** Modules on when this is written; they count as caught up. */
+  seen?: string[] | null;
+}
+
 export function useSaveBoard(key: BoardKey) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (layout: TileSpec[]) =>
-      api<BoardOut>(`/boards/${key}`, { method: "PUT", body: JSON.stringify({ layout }) }),
+    mutationFn: ({ layout, seen }: SaveArgs) =>
+      api<BoardOut>(`/boards/${key}`, {
+        method: "PUT",
+        body: JSON.stringify({ layout, seen_modules: seen ?? undefined }),
+      }),
     // Optimistic: Done shows the new arrangement at once; a failed save puts
     // the old one back.
-    onMutate: async (layout) => {
+    onMutate: async ({ layout, seen }) => {
       await client.cancelQueries({ queryKey: boardKey(key) });
       const previous = client.getQueryData<BoardOut>(boardKey(key));
-      client.setQueryData<BoardOut>(boardKey(key), { key, layout, updated_at: previous?.updated_at ?? null });
+      client.setQueryData<BoardOut>(boardKey(key), {
+        key,
+        layout,
+        seen_modules: seen ?? previous?.seen_modules ?? null,
+        updated_at: previous?.updated_at ?? null,
+      });
       return { previous };
     },
     onError: (_err, _layout, ctx) => {

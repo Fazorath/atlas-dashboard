@@ -1,6 +1,6 @@
-/* Habits — a Board of Habits' Widgets: Today's habits, Heatmap, and the
-   Area-only This week, which is also the backfill (pick a past day and its
-   rows tick that day).
+/* Habits — a Board of Habits' Widgets: Today's habits and the Area-only
+   This week, which is also the Backfill (pick a past day and its rows tick
+   that day).
 
    Setting habits up is not a Widget: Manage, in the toolbar, opens a sheet to
    add, rename, archive and restore them, and to link one to a Health figure

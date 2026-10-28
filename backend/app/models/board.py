@@ -34,6 +34,12 @@ class Board(Base):
     # "today", or an Area key ("health", "money", …).
     key: Mapped[str] = mapped_column(String(32), primary_key=True)
     layout: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
+    # Module ids that were on when this layout was last saved or brought up to
+    # date. A module on now but not listed here was enabled since, and the
+    # dashboard appends its default Widgets once. Null: saved before this
+    # was recorded, so the modules with a Widget on the layout count as seen
+    # and any other enabled module gets its defaults on the next visit.
+    seen_modules: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

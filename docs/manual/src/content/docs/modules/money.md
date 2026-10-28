@@ -35,6 +35,8 @@ Your balance, this month's **In** and **Out**, where the money went by category,
    SECURO_PASSWORD=...
    ```
 
+   If the password contains a `$`, wrap it in single quotes (`SECURO_PASSWORD='Tr0ub$dor&3'`). Compose expands `$` in `.env` and would silently drop part of it.
+
 2. Tell Atlas where Securo is, in `config/modules/securo.yaml`:
 
    ```yaml
@@ -47,7 +49,7 @@ Your balance, this month's **In** and **Out**, where the money went by category,
 4. Add `securo` to `modules:` in `config/atlas.yaml`, then:
 
    ```bash
-   docker compose up -d atlas-api      # up, not restart: .env changed
+   docker compose up -d                      # up, not restart: .env changed
    curl -s 127.0.0.1:8187/api/finance/ | python3 -m json.tool
    ```
 

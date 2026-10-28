@@ -1,7 +1,11 @@
 # Builds the Atlas Manual (docs/manual, Astro Starlight) and publishes it to
 # GitHub Pages at https://fazorath.github.io/atlas-dashboard/.
 #
-# One-time setup in the repo: Settings -> Pages -> Source: "GitHub Actions".
+# This file is identical in atlas-private and the public atlas-dashboard repo.
+# Both build the Manual (a docs check); only atlas-dashboard uploads and deploys,
+# because Pages is enabled there and must stay off in the private repo.
+#
+# One-time setup in atlas-dashboard: Settings -> Pages -> Source: "GitHub Actions".
 name: Manual
 
 on:
@@ -39,11 +43,13 @@ jobs:
       - run: npm run build
         env:
           ASTRO_TELEMETRY_DISABLED: "1"
-      - uses: actions/upload-pages-artifact@v3
+      - if: github.repository == 'Fazorath/atlas-dashboard'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: docs/manual/dist
 
   deploy:
+    if: github.repository == 'Fazorath/atlas-dashboard'
     needs: build
     runs-on: ubuntu-latest
     environment:

@@ -7,6 +7,7 @@ import { Check, HeartPulse } from "lucide-react";
 import { useState } from "react";
 
 import { SegmentMeter } from "@/components/ui/segment-meter";
+import { fitSlots } from "@/lib/habit-slots";
 import {
   localDate,
   measuredLine,
@@ -15,7 +16,6 @@ import {
   useHabits,
   useToggleHabit,
   type Habit,
-  type HistoryDay,
 } from "@/lib/habits";
 import { cn } from "@/lib/utils";
 import { calendarWeek, R, WidgetCard } from "@/widgets/frame";
@@ -23,12 +23,23 @@ import type { WidgetDef, WidgetProps } from "@/widgets/types";
 
 const EMPTY = { title: "No habits yet", text: "Add one from Manage on the Habits screen." };
 
+/** Slots per Size before the "+N" marker takes the last one, tuned so every
+ *  name fits at two lines. A phone's M strip is narrower, so it has fewer. */
+const M_SLOTS = { phone: 5, lap: 8 };
+const L_ROWS = 7;
+/** Checklist rows across both columns; the phone's M tile is the same height. */
+const CHECKLIST_ROWS = 6;
+
+/** Names wrap at spaces onto two lines, then end in "…". */
+const TWO_LINES = "line-clamp-2 break-words";
+
 function TodaysHabits({ size }: WidgetProps) {
   const habits = useHabits();
   const toggle = useToggleHabit();
   const today = localDate();
   const tick = (h: Habit) => toggle.mutate({ id: h.id, date: today });
   const state = habits.isPending ? "loading" : habits.isError ? "error" : "ready";
+  const rows = fitSlots(habits.habits, L_ROWS);
 
   return (
     <WidgetCard
@@ -51,42 +62,11 @@ function TodaysHabits({ size }: WidgetProps) {
           <SegmentMeter value={habits.total ? habits.done / habits.total : 0} label={`${habits.done} of ${habits.total} done today`} />
         </div>
       ) : size === "M" ? (
-        <>
-          <p className="flex items-baseline gap-2">
-            <span className={R.s}>
-              {habits.done}/{habits.total}
-            </span>
-            <span className="truncate text-[12px] text-fg-muted">
-              today{habits.habits.some((h) => h.metric) ? " · auto ones tick from Health" : ""}
-            </span>
-          </p>
-          <ul className="mt-auto grid gap-[2px]" style={{ gridTemplateColumns: `repeat(${Math.max(habits.total, 1)}, minmax(0, 1fr))` }}>
-            {habits.habits.slice(0, 8).map((h) => (
-              <li key={h.id} className="flex min-w-0 flex-col items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => tick(h)}
-                  aria-pressed={h.done}
-                  aria-label={`${h.done ? "Untick" : "Tick"} ${h.name}`}
-                  className={cn(
-                    "pressable grid size-11 place-items-center rounded-row transition-colors",
-                    h.done ? "bg-accent text-bg" : "border border-border-subtle bg-surface-2 text-fg-muted",
-                  )}
-                >
-                  {h.done ? <Check strokeWidth={3} className="size-4" /> : <span className="text-[13px]">{h.icon ?? h.name.slice(0, 1)}</span>}
-                </button>
-                <span className="w-full truncate text-center text-[10px] text-fg-muted">{h.name.split(" ")[0]}</span>
-                <span className={cn(R.t, "text-[10px]", h.done ? "text-accent" : "text-fg-dim")}>
-                  {h.auto ? "auto" : `${h.current_streak}d`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
+        <HabitKeys habits={habits.habits} onTick={tick} />
       ) : (
         <>
           <ul className="flex min-h-0 flex-1 flex-col justify-between overflow-hidden">
-            {habits.habits.map((h) => (
+            {rows.shown.map((h) => (
               <li key={h.id}>
                 <button
                   type="button"
@@ -103,7 +83,7 @@ function TodaysHabits({ size }: WidgetProps) {
                   >
                     {h.done ? <Check strokeWidth={3} className="size-3.5" /> : null}
                   </span>
-                  <span className={cn("min-w-0 flex-1 truncate text-[14px] font-medium", h.done && "text-fg-muted")}>
+                  <span className={cn("min-w-0 flex-1 text-[14px] leading-tight font-medium", TWO_LINES, h.done && "text-fg-muted")}>
                     {h.name}
                   </span>
                   {h.metric ? (
@@ -117,6 +97,9 @@ function TodaysHabits({ size }: WidgetProps) {
                 </button>
               </li>
             ))}
+            {rows.overflow > 0 ? (
+              <li className="flex min-h-10 items-center pl-9 text-[13px] text-fg-muted">+{rows.overflow} more</li>
+            ) : null}
           </ul>
           <div className="flex items-center gap-3">
             <SegmentMeter value={habits.total ? habits.done / habits.total : 0} label={`${habits.done} of ${habits.total} done today`} className="flex-1" />
@@ -130,162 +113,127 @@ function TodaysHabits({ size }: WidgetProps) {
   );
 }
 
-/* --- Heatmap ------------------------------------------------------------- */
-
-const FILL = [
-  "var(--surface-2)",
-  "color-mix(in oklab, var(--habits) 15%, var(--surface-2))",
-  "color-mix(in oklab, var(--habits) 40%, var(--surface-2))",
-  "color-mix(in oklab, var(--habits) 70%, var(--surface-2))",
-  "var(--habits)",
-];
-
-function level(day: HistoryDay): number {
-  if (day.total === 0 || day.done === 0) return 0;
-  const r = day.done / day.total;
-  return r >= 1 ? 4 : r >= 0.66 ? 3 : r >= 0.33 ? 2 : 1;
-}
-
-function Heatmap({ size }: WidgetProps) {
-  const weeks = size === "XL" ? 17 : 8;
+/** M, as rows: a check square and the full name, two columns. An alternative
+ *  to the boxes for people who'd rather tick from a list. No streaks. */
+function HabitChecklist(_: WidgetProps) {
   const habits = useHabits();
-  // Whole weeks back to a Monday, plus this week so far.
-  const lead = (new Date().getDay() + 6) % 7;
-  const history = useHabitHistory((weeks - 1) * 7 + lead + 1);
-  const days = history.data ?? [];
-  const counted = days.filter((d) => d.total > 0);
-  const share = counted.length
-    ? counted.reduce((a, d) => a + d.done, 0) / counted.reduce((a, d) => a + d.total, 0)
-    : null;
-  const perfect = counted.filter((d) => d.done >= d.total).length;
-  const best = habits.habits.reduce<Habit | null>((b, h) => (!b || h.longest_streak > b.longest_streak ? h : b), null);
-  const state = history.isPending ? "loading" : history.isError ? "error" : "ready";
-
-  const range =
-    days.length > 0
-      ? `${parseLocalDate(days[0].date).toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${parseLocalDate(
-          days[days.length - 1].date,
-        ).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
-      : "";
+  const toggle = useToggleHabit();
+  const today = localDate();
+  const state = habits.isPending ? "loading" : habits.isError ? "error" : "ready";
+  const rows = fitSlots(habits.habits, CHECKLIST_ROWS);
 
   return (
     <WidgetCard
-      title="Heatmap"
+      title="Habit checklist"
       area="habits"
       state={state}
       problem={{ chip: "Unavailable", text: "The Atlas API didn't answer." }}
-      empty={habits.configured && habits.total === 0 ? { ...EMPTY, text: "The heatmap fills in from the first day you tick a habit." } : null}
-      aside={`${weeks} weeks`}
+      empty={habits.configured && habits.total === 0 ? EMPTY : null}
+      aside={`${habits.remaining} left`}
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 lap:flex-row lap:gap-6">
-        <Grid days={days} weeks={weeks} portrait={size === "XL"} />
-        <div className="flex shrink-0 flex-row flex-wrap gap-x-6 gap-y-2.5 lap:w-[150px] lap:flex-col lap:justify-center">
-          <Stat value={share != null ? `${Math.round(share * 100)}%` : "—"} label="of ticks done" />
-          <Stat value={String(perfect)} label="perfect days" />
-          {best && best.longest_streak > 0 ? <Stat value={`${best.longest_streak}d`} label={`best · ${best.name}`} /> : null}
-        </div>
-        {size === "XL" ? (
-          <ul className="hidden min-w-0 flex-1 flex-col justify-center gap-2 border-l border-divider pl-6 lap:flex">
-            {[...habits.habits]
-              .sort((a, b) => b.completion_30d - a.completion_30d)
-              .slice(0, 7)
-              .map((h) => (
-                <li key={h.id} className="grid grid-cols-[minmax(0,1fr)_64px_36px] items-center gap-3">
-                  <span className="truncate text-[13px]">{h.name}</span>
-                  <span className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-                    <span className="block h-full rounded-full bg-accent" style={{ width: `${h.completion_30d * 100}%` }} />
-                  </span>
-                  <span className={cn(R.t, "text-right text-fg-muted")}>{Math.round(h.completion_30d * 100)}%</span>
-                </li>
-              ))}
-          </ul>
+      <ul className="mt-auto grid grid-cols-2 gap-x-3 gap-y-1">
+        {rows.shown.map((h) => (
+          <li key={h.id} className="min-w-0">
+            <button
+              type="button"
+              onClick={() => toggle.mutate({ id: h.id, date: today })}
+              aria-pressed={h.done}
+              aria-label={`${h.done ? "Untick" : "Tick"} ${h.name}${h.metric ? " (auto)" : ""}`}
+              className="pressable flex min-h-9 w-full items-center gap-2 rounded-row text-left"
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "grid size-5 shrink-0 place-items-center rounded-[5px] transition-colors",
+                  h.done ? "bg-accent text-bg" : "border-2 border-check-outline",
+                )}
+              >
+                {h.done ? <Check strokeWidth={3} className="size-3" /> : null}
+              </span>
+              <span aria-hidden className={cn("min-w-0 flex-1 text-[12px] leading-tight font-medium", TWO_LINES, h.done && "text-fg-muted")}>
+                {h.name}
+              </span>
+              {h.metric ? (
+                <span aria-hidden className="flex shrink-0 items-center gap-0.5 text-[10px] text-fg-muted">
+                  <HeartPulse strokeWidth={2.2} className="size-3" /> auto
+                </span>
+              ) : null}
+            </button>
+          </li>
+        ))}
+        {rows.overflow > 0 ? (
+          <li className="flex min-h-9 items-center pl-7 text-[12px] text-fg-muted">+{rows.overflow} more</li>
         ) : null}
-      </div>
-      <p className={cn(R.t, "flex items-center justify-between gap-3 text-fg-muted")}>
-        <span>{range}</span>
-        <span aria-hidden className="flex items-center gap-[3px]">
-          Less
-          {FILL.map((f, i) => (
-            <span key={i} className="size-[9px] rounded-[2px]" style={{ background: f }} />
-          ))}
-          More
-        </span>
-      </p>
+      </ul>
     </WidgetCard>
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+/** M: one key per Habit, its icon (or first letter) on the key, the full name
+ *  and streak under it. A tick fills the key and keeps the icon, with a check
+ *  in the corner, so the strip still reads at a glance once it's done. */
+function HabitKeys({ habits, onTick }: { habits: Habit[]; onTick: (h: Habit) => void }) {
+  // Both layouts are rendered and CSS picks one, so nothing is measured.
+  const phone = fitSlots(habits, M_SLOTS.phone);
+  const lap = fitSlots(habits, M_SLOTS.lap);
+  const columns = (r: typeof lap) => Math.max(r.shown.length + (r.overflow > 0 ? 1 : 0), 1);
+
   return (
-    <div className="min-w-0">
-      <p className={R.s}>{value}</p>
-      <p className="mt-0.5 truncate text-[11px] text-fg-muted lap:text-[12px]">{label}</p>
-    </div>
+    <ul
+      className="mt-auto grid grid-cols-[repeat(var(--cols-phone),minmax(0,1fr))] items-start gap-1.5 lap:grid-cols-[repeat(var(--cols-lap),minmax(0,1fr))] lap:gap-2"
+      style={{ "--cols-phone": columns(phone), "--cols-lap": columns(lap) } as React.CSSProperties}
+    >
+      {lap.shown.map((h, i) => (
+        <li key={h.id} className={cn("flex min-w-0 flex-col items-center gap-1.5", i >= phone.shown.length && "max-lap:hidden")}>
+          <button
+            type="button"
+            onClick={() => onTick(h)}
+            aria-pressed={h.done}
+            aria-label={`${h.done ? "Untick" : "Tick"} ${h.name}`}
+            className={cn(
+              "pressable relative grid aspect-square w-full max-w-14 place-items-center rounded-row transition-colors",
+              h.done ? "bg-accent text-bg" : "border border-border-subtle bg-surface-2 text-fg-muted",
+            )}
+          >
+            <span aria-hidden className={h.icon ? "text-[20px] leading-none lap:text-[25px]" : "text-[16px] font-semibold"}>
+              {h.icon ?? h.name.slice(0, 1)}
+            </span>
+            {h.done ? (
+              <span
+                aria-hidden
+                className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full bg-fg text-bg ring-2 ring-surface"
+              >
+                <Check strokeWidth={3.5} className="size-2.5" />
+              </span>
+            ) : null}
+          </button>
+          <span aria-hidden className={cn("min-h-[2lh] w-full text-center text-[12px] leading-tight", TWO_LINES, h.done ? "text-fg-muted" : "text-fg")}>
+            {h.name}
+          </span>
+          <span aria-hidden className={cn(R.t, h.done ? "text-accent" : "text-fg-dim")}>
+            {h.auto ? "auto" : `${h.current_streak}d`}
+          </span>
+        </li>
+      ))}
+      <MoreKey count={phone.overflow} className="lap:hidden" />
+      <MoreKey count={lap.overflow} className="max-lap:hidden" />
+    </ul>
   );
 }
 
-/** Columns are weeks, Monday on top. `portrait` (phone XL) turns the weeks
- *  into rows running downward. Sized against its own box so every cell stays
- *  square whatever the tile's shape. */
-function Grid({ days, weeks, portrait }: { days: HistoryDay[]; weeks: number; portrait: boolean }) {
-  const lead = days.length ? (parseLocalDate(days[0].date).getDay() + 6) % 7 : 0;
-  const cells: (HistoryDay | null)[] = [...Array(lead).fill(null), ...days];
-  while (cells.length < weeks * 7) cells.push(null);
-  const today = localDate();
-  const label = (d: HistoryDay) =>
-    `${parseLocalDate(d.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}: ${
-      d.total === 0 ? "no habits yet" : `${d.done} of ${d.total}`
-    }`;
-
-  const grid = (orientation: "landscape" | "portrait") => {
-    const cols = orientation === "landscape" ? weeks : 7;
-    const rows = orientation === "landscape" ? 7 : weeks;
-    return (
-      <div
-        role="img"
-        aria-label={`Habit completion, last ${weeks} weeks`}
-        className="grid gap-[3px]"
-        style={{
-          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-          gridAutoFlow: orientation === "landscape" ? "column" : "row",
-          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-          aspectRatio: `${cols} / ${rows}`,
-          width: `min(100%, calc(100cqh * ${cols / rows}))`,
-        }}
-      >
-        {cells.map((d, i) =>
-          d ? (
-            <span
-              key={d.date}
-              title={label(d)}
-              className={cn("rounded-[3px]", d.date === today && "outline outline-1 outline-fg-muted")}
-              style={{ background: d.total === 0 ? "transparent" : FILL[level(d)], boxShadow: d.total === 0 ? "inset 0 0 0 1px var(--habits-track)" : undefined }}
-            />
-          ) : (
-            <span key={`pad-${i}`} aria-hidden />
-          ),
-        )}
-      </div>
-    );
-  };
-
-  // On a phone the tile hugs its content, so the box takes its height from
-  // the grid's own shape instead of from the tile.
-  const phoneRatio = portrait ? `7 / ${weeks}` : `${weeks} / 7`;
+/** The "+N" key. Not a tick target: a tap falls through to the card, which
+ *  opens the Habits Area like any tap on the Widget. */
+function MoreKey({ count, className }: { count: number; className: string }) {
+  if (count === 0) return null;
   return (
-    <div
-      className="min-h-0 min-w-0 flex-1 [container-type:size] max-lap:flex-none max-lap:[aspect-ratio:var(--phone-ratio)]"
-      style={{ "--phone-ratio": phoneRatio } as React.CSSProperties}
-    >
-      {portrait ? (
-        <>
-          <div className="hidden h-full lap:block">{grid("landscape")}</div>
-          <div className="h-full lap:hidden">{grid("portrait")}</div>
-        </>
-      ) : (
-        grid("landscape")
-      )}
-    </div>
+    <li className={cn("flex min-w-0 flex-col items-center", className)}>
+      <span
+        aria-label={`${count} more habits`}
+        className="grid aspect-square w-full max-w-14 place-items-center rounded-row border border-dashed border-border-subtle text-[14px] font-semibold text-fg-muted"
+      >
+        +{count}
+      </span>
+    </li>
   );
 }
 
@@ -301,7 +249,7 @@ function ThisWeek(_: WidgetProps) {
   const history = useHabitHistory(7);
   const byDate = new Map((history.data ?? []).map((d) => [d.date, d]));
   const state = habits.isPending ? "loading" : habits.isError ? "error" : "ready";
-  const week = calendarWeek().map((d) => ({ ...d, key: localDate(d.date) }));
+  const week = calendarWeek(parseLocalDate(localDate())).map((d) => ({ ...d, key: localDate(d.date) }));
   const picked = week.find((d) => d.key === selected);
 
   return (
@@ -378,6 +326,6 @@ function ThisWeek(_: WidgetProps) {
 
 export const HABITS_WIDGETS: WidgetDef[] = [
   { id: "habits.today", title: "Today's habits", area: "habits", sizes: ["S", "M", "L"], placement: "anywhere", render: TodaysHabits },
-  { id: "habits.heatmap", title: "Heatmap", area: "habits", sizes: ["L", "XL"], placement: "anywhere", render: Heatmap },
+  { id: "habits.checklist", title: "Habit checklist", area: "habits", sizes: ["M"], placement: "anywhere", galleryOnly: true, render: HabitChecklist },
   { id: "habits.week", title: "This week", area: "habits", sizes: ["L"], placement: "area", render: ThisWeek },
 ];

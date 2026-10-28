@@ -6,6 +6,7 @@ timestamps — a tick belongs to a day, not an instant.
 
 from datetime import date, datetime
 
+import regex
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -18,11 +19,26 @@ def _clean_name(value: str | None) -> str | None:
     return value
 
 
+def _clean_icon(value: str | None) -> str | None:
+    """A Habit icon is one emoji or character. Blank means no icon, so a
+    Habit never draws an empty box; anything longer would make the icon a
+    second short name."""
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    if len(regex.findall(r"\X", value)) != 1:
+        raise ValueError("icon must be one emoji or character")
+    return value
+
+
 class HabitIn(BaseModel):
     name: str = Field(max_length=80)
     icon: str | None = Field(default=None, max_length=16)
 
     _name = field_validator("name")(_clean_name)
+    _icon = field_validator("icon")(_clean_icon)
 
 
 class HabitPatch(BaseModel):
@@ -40,6 +56,7 @@ class HabitPatch(BaseModel):
     target: float | None = Field(default=None, gt=0)
 
     _name = field_validator("name")(_clean_name)
+    _icon = field_validator("icon")(_clean_icon)
 
 
 class HabitOut(BaseModel):
@@ -94,7 +111,7 @@ class MetricOut(BaseModel):
 
 
 class HistoryDay(BaseModel):
-    """One heatmap cell: how many habits were ticked of how many were live."""
+    """One day of history: how many habits were ticked of how many were live."""
 
     date: date
     done: int

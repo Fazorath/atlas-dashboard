@@ -18,11 +18,15 @@ import {
 } from "lucide-react";
 
 import { areaEnabled } from "@/lib/config";
-import { SOURCE, type SourceName } from "@/lib/sources";
+import { SOURCE } from "@/lib/sources";
 
-export type Accent = "sleep" | "habits" | "due" | "money" | "weather" | "work";
+/** A palette name, or `custom-<id>` for a Custom module's hex colour. */
+export type Accent = string;
 
-export type AreaKey = "health" | "school" | "money" | "habits" | "weather" | "listening" | "work";
+export type BuiltInAreaKey = "health" | "school" | "money" | "habits" | "weather" | "listening" | "work";
+
+/** A built-in Area, or a Custom module's (its module id). */
+export type AreaKey = string;
 
 export interface Area {
   key: AreaKey;
@@ -32,7 +36,7 @@ export interface Area {
   icon: LucideIcon;
   /** The Source whose Freshness the Area's header shows. Habits has none —
    *  you are its upstream. */
-  source?: SourceName;
+  source?: string;
   /** False for Areas reached only by tapping their Today Card. */
   nav: boolean;
 }
@@ -132,8 +136,8 @@ export const LISTENING_ICON = AREAS.listening.icon;
 
 /** Habit rows cycle through the palette so a list of five reads as five
  *  different things at a glance, without anyone choosing colours by hand. */
-export const HABIT_ACCENT_CYCLE: Accent[] = ["weather", "due", "money", "sleep", "habits"];
+export const HABIT_ACCENT_CYCLE: string[] = ["weather", "due", "money", "sleep", "habits"];
 
-export function habitAccent(index: number): Accent {
+export function habitAccent(index: number): string {
   return HABIT_ACCENT_CYCLE[index % HABIT_ACCENT_CYCLE.length];
 }

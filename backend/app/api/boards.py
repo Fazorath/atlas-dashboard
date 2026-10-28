@@ -29,7 +29,9 @@ async def get_board(key: str = BoardKey, session: AsyncSession = Depends(get_ses
     ).scalar_one_or_none()
     if row is None:
         return BoardOut(key=key, layout=None, updated_at=None)
-    return BoardOut(key=key, layout=row.layout, updated_at=row.updated_at)
+    return BoardOut(
+        key=key, layout=row.layout, seen_modules=row.seen_modules, updated_at=row.updated_at
+    )
 
 
 @router.put("/{key}", response_model=BoardOut)
@@ -37,17 +39,23 @@ async def save_board(
     body: BoardIn, key: str = BoardKey, session: AsyncSession = Depends(get_session)
 ) -> BoardOut:
     layout = [tile.model_dump() for tile in body.layout]
-    stmt = insert(Board).values(user_id=OWNER_ID, key=key, layout=layout)
+    stmt = insert(Board).values(
+        user_id=OWNER_ID, key=key, layout=layout, seen_modules=body.seen_modules
+    )
+    changes: dict = {"layout": layout, "updated_at": func.now()}
+    if body.seen_modules is not None:
+        changes["seen_modules"] = body.seen_modules
     row = (
         await session.execute(
             stmt.on_conflict_do_update(
-                index_elements=["user_id", "key"],
-                set_={"layout": layout, "updated_at": func.now()},
-            ).returning(Board.updated_at)
+                index_elements=["user_id", "key"], set_=changes
+            ).returning(Board.updated_at, Board.seen_modules)
         )
     ).one()
     await session.commit()
-    return BoardOut(key=key, layout=body.layout, updated_at=row.updated_at)
+    return BoardOut(
+        key=key, layout=body.layout, seen_modules=row.seen_modules, updated_at=row.updated_at
+    )
 
 
 @router.delete("/{key}", status_code=status.HTTP_204_NO_CONTENT)

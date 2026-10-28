@@ -25,7 +25,7 @@ git diff ORIG_HEAD -- config.example .env.example   # what this pull changed
 diff -ru config.example config                      # your config against the template
 ```
 
-Copy across any new keys you want, then `docker compose restart atlas-api` (for `config/`) or `docker compose up -d atlas-api` (for `.env`).
+Copy across any new keys you want, then `docker compose restart atlas-api` (for `config/`) or `docker compose up -d` (for `.env`).
 
 A key Atlas doesn't know only produces a warning in the log, and a missing one falls back to its default, so an older `config/` keeps working; you just won't have the new thing until you add it.
 
@@ -39,9 +39,27 @@ git checkout <tag>
 docker compose up -d --build
 ```
 
+A checked-out tag doesn't follow `main`, so `git pull` stops working. To follow `main` again, run `git checkout main` before you pull.
+
 ## Rolling back
 
-Migrations only go forward. To go back to an older version, restore the [backup](/atlas-dashboard/operate/backups/) you took before updating, then check out the older code and rebuild.
+Migrations only go forward, so going back to an older version means going back to the [backup](/atlas-dashboard/operate/backups/) you took before updating. Anything written since that dump is lost.
+
+Do it in this order. The newer code must not start against the restored data, and the restore has to go into an empty database:
+
+```bash
+docker compose stop atlas-api atlas-cron
+git fetch --tags
+git checkout <tag>
+docker compose exec -T atlas-db dropdb -U atlas --force atlas
+docker compose exec -T atlas-db createdb -U atlas atlas
+docker compose exec -T atlas-db pg_restore -U atlas -d atlas < atlas-2026-10-01.dump
+docker compose up -d --build
+```
+
+Use your `POSTGRES_USER` and `POSTGRES_DB` if you changed them from `atlas`.
+
+Don't skip the drop and create. A plain `pg_restore --clean` only removes what's in the dump, so tables added by the newer version stay behind. When you next update, the newer migrations run again, find those tables already there, and `atlas-api` stops at boot with `DuplicateTable`.
 
 ## Clean up
 

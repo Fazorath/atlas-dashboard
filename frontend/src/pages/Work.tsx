@@ -11,6 +11,7 @@ import { useSearchParams } from "react-router-dom";
 import { AreaBoard } from "@/components/board/AreaBoard";
 import { Button } from "@/components/ui/button";
 import { EditWeek } from "@/components/work/EditWeek";
+import { PhotoStatus } from "@/components/work/PhotoStatus";
 import { localDate } from "@/lib/habits";
 import { mondayOf, useWork } from "@/lib/work";
 
@@ -35,6 +36,7 @@ export function Work() {
     <>
       <AreaBoard
         area="work"
+        notice={<PhotoStatus />}
         actions={
           <Button variant="ghost" onClick={open} aria-haspopup="dialog" aria-label="Edit week">
             <CalendarRange aria-hidden strokeWidth={2.2} className="size-4" />

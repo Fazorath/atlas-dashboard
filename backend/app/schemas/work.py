@@ -8,6 +8,8 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel, Field, field_serializer, model_validator
 
+from app.models.work import DraftStatus
+
 
 class ShiftIn(BaseModel):
     date: date
@@ -24,6 +26,9 @@ class ShiftIn(BaseModel):
 class WeekIn(BaseModel):
     # Seven days, one shift each at most.
     shifts: list[ShiftIn] = Field(max_length=7)
+    # The Draft week these rows were based on, if any. Saving deletes only that
+    # one: a newer Draft for the same week stays for the user to look at.
+    draft_id: int | None = None
 
 
 class ShiftOut(BaseModel):
@@ -55,3 +60,26 @@ class WorkSummary(BaseModel):
     next_week: WeekOut
     # The first shift on a day after today, from any entered week.
     next_shift: ShiftOut | None
+
+
+class DraftDay(BaseModel):
+    date: date
+    # "HH:MM", or null when the day was read as off or couldn't be read.
+    start: str | None
+    end: str | None
+    off: bool
+    #: What the model copied from the paper, shown beside a flagged day.
+    raw: str
+
+
+class PhotoRead(BaseModel):
+    """A Schedule photo read: in progress, failed, or a Draft week."""
+
+    id: int
+    status: DraftStatus
+    week_start: date | None
+    #: No dates were read off the paper: week_start is the week that was open.
+    week_guessed: bool
+    days: list[DraftDay] | None
+    error: str | None
+    created_at: datetime

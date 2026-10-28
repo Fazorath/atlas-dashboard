@@ -220,8 +220,11 @@
 }
 
 @layer base {
+  /* No rubber-band on the document itself: inside the app shell only the
+     inner column scrolls, and a bouncing page would drag the tab bar with it. */
   html {
     background-color: var(--bg);
+    overscroll-behavior: none;
   }
 
   body {

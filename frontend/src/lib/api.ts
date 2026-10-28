@@ -1,6 +1,8 @@
 /** Everything is same-origin: nginx proxies /api to atlas-api. No auth header —
  *  whatever fronts Atlas is the boundary. */
 
+import { errorMessage } from "./api-error";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -19,14 +21,13 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, { ...init, headers });
 
   if (!res.ok) {
-    let detail = res.statusText;
+    let body: unknown;
     try {
-      const body = await res.json();
-      if (typeof body?.detail === "string") detail = body.detail;
+      body = await res.json();
     } catch {
       /* non-JSON error body; the status text will do */
     }
-    throw new ApiError(detail, res.status);
+    throw new ApiError(errorMessage(res.status, res.statusText, body), res.status);
   }
 
   // A DELETE answers 204 with no body to parse.
@@ -275,3 +276,19 @@ export const getAccounts = () => api<Account[]>("/finance/accounts");
 export const getBills = (days: number) => api<Bill[]>(`/finance/bills?days=${days}`);
 export const getGoals = () => api<Goal[]>("/finance/goals");
 export const getDailyOut = () => api<DayOut[]>("/finance/daily");
+
+export type { CustomPayloadModule } from "./custom-modules";
+export const getCustomModules = () => api<import("./custom-modules").CustomPayloadModule[]>("/custom");
+export const getCustomStat = (module: string, widget: string) =>
+  api<{ value: unknown; unit: string | null }>(`/custom/${module}/widgets/${widget}`);
+
+export const getCustomList = (module: string, widget: string) =>
+  api<{ rows: import("./custom-modules").ListRow[] }>(`/custom/${module}/widgets/${widget}`);
+
+export const putCustomSecret = (module: string, name: string, value: string) =>
+  api<{ name: string; set: boolean }>(`/custom/${module}/secrets/${name}`, {
+    method: "PUT",
+    body: JSON.stringify({ value }),
+  });
+export const deleteCustomSecret = (module: string, name: string) =>
+  api<{ name: string; set: boolean }>(`/custom/${module}/secrets/${name}`, { method: "DELETE" });

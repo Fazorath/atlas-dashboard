@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clock import local_zone
 from app.config import settings
 from app.models import Assignment, ClassSession
+from app.sources import Unreachable
 
 log = logging.getLogger(__name__)
 
@@ -97,11 +98,12 @@ def _join_url(description: str) -> str | None:
     return links[0] if links else None
 
 
-def _redact(text: str) -> str:
+def _redact(text: str, url: str | None = None) -> str:
     """The feed URL is a credential — its token reads your calendar with no
     other auth. It must never reach sync_runs, a log line, or an API response."""
-    if settings.canvas_ics_url:
-        text = text.replace(settings.canvas_ics_url, "<CANVAS_ICS_URL>")
+    for secret in {settings.canvas_ics_url, url or ""}:
+        if secret:
+            text = text.replace(secret, "<CANVAS_ICS_URL>")
     return text
 
 
@@ -191,12 +193,16 @@ def parse_feed(body: bytes | str) -> Feed:
     return Feed(assignments=list(found.values()), classes=list(classes.values()))
 
 
-async def fetch_feed() -> Feed:
+async def fetch_feed(url: str | None = None) -> Feed:
+    """`url` overrides the configured feed — Setup's Test passes its own."""
+    url = url or settings.canvas_ics_url
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
-            response = await client.get(settings.canvas_ics_url)
+            response = await client.get(url)
     except httpx.HTTPError as exc:
-        raise RuntimeError(_redact(f"Canvas feed unreachable: {type(exc).__name__}: {exc}")) from None
+        raise Unreachable(
+            _redact(f"Canvas feed unreachable: {type(exc).__name__}: {exc}", url)
+        ) from None
 
     if response.status_code >= 400:
         # 401/404 is what a regenerated feed token looks like: Canvas invalidates

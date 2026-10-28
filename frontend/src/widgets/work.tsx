@@ -8,11 +8,12 @@
 import { Link } from "react-router-dom";
 
 import { SegmentMeter } from "@/components/ui/segment-meter";
-import { localDate, parseLocalDate } from "@/lib/habits";
+import { parseLocalDate, zonedDate } from "@/lib/habits";
 import { cn } from "@/lib/utils";
 import {
   compactRange,
   compactTime,
+  draftFor,
   durationParts,
   editLink,
   hoursLabel,
@@ -22,6 +23,7 @@ import {
   untilShort,
   at,
   useNow,
+  usePhotoReads,
   useWork,
   weekDays,
   weekdayShort,
@@ -37,6 +39,9 @@ const NOT_ENTERED = {
   title: "This week isn't entered",
   text: "Tap to enter this week's shifts.",
 };
+// A Schedule photo (ADR 0006) for a week nobody entered yet.
+const DRAFT_READY = { title: "Schedule ready to check", text: "Tap to check this week and save it." };
+const READING = { title: "Reading your schedule", text: "Your photo is being read. Check back in a couple of minutes." };
 
 /** "WED · OCT 14" for the header. */
 function dayAside(iso: string): string {
@@ -62,7 +67,13 @@ function ShiftWidget({ size }: WidgetProps) {
   const state = work.isPending ? "loading" : work.isError ? "error" : "ready";
   const t = work.data ? todayOf(work.data, now) : null;
   const unknown = t?.kind === "unknown";
-  const today = localDate(now);
+  const today = zonedDate(now);
+  const reads = usePhotoReads();
+  const notEntered = draftFor(reads.data, mondayOf(today))
+    ? DRAFT_READY
+    : reads.data?.some((r) => r.status === "reading")
+      ? READING
+      : NOT_ENTERED;
 
   return (
     <WidgetCard
@@ -70,7 +81,7 @@ function ShiftWidget({ size }: WidgetProps) {
       area="work"
       state={state}
       problem={PROBLEM}
-      empty={unknown ? NOT_ENTERED : null}
+      empty={unknown ? notEntered : null}
       to={unknown ? editLink(mondayOf(today)) : undefined}
       aside={size === "M" ? (t?.kind === "on" ? "on now" : dayAside(today)) : null}
     >
@@ -181,7 +192,7 @@ function WeekWidget({ size }: WidgetProps) {
   const state = work.isPending ? "loading" : work.isError ? "error" : "ready";
   const week = work.data?.this_week;
   const next = work.data?.next_week;
-  const today = localDate(now);
+  const today = zonedDate(now);
 
   return (
     <WidgetCard

@@ -1,0 +1,19 @@
+# A second Custom module, just text. Delete this file once you've read it.
+atlas: 1
+name: Welcome
+
+area:
+  label: Welcome
+  icon: sparkles
+
+widgets:
+  - id: hello
+    type: note
+    title: Welcome to Atlas
+    text: |
+      This note is a Custom module: config/custom/welcome.yaml. Every file in
+      that folder adds widgets to Atlas — text like this, links, or numbers
+      pulled live from your own apps' JSON APIs (Home Assistant, Uptime Kuma,
+      anything that answers JSON).
+
+      Delete the file to remove this note.

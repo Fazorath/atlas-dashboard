@@ -1,12 +1,14 @@
-/* The avatar, and the menu behind it. Today it holds one thing — the Status
-   screen — and it is where accounts and connections will live once Atlas has
-   more than one person in it. A dot on the avatar says a Source needs you. */
+/* The avatar, and the menu behind it: the Status screen (Sources, and
+   Settings for the Owner), and Lock while this device is unlocked. It is where
+   accounts will live once Atlas has more than one person in it. A dot on the
+   avatar says a Source needs you. */
 
-import { Activity } from "lucide-react";
+import { Activity, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { ownerName } from "@/lib/config";
+import { useLock, useUnlocked } from "@/lib/owner";
 import { problemsOf, useSources } from "@/lib/sources";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +22,8 @@ export function AccountMenu({ className }: { className?: string }) {
   const root = useRef<HTMLDivElement>(null);
   const sources = useSources();
   const problems = problemsOf(sources.all);
+  const unlocked = useUnlocked();
+  const lock = useLock();
 
   useEffect(() => {
     if (!open) return;
@@ -73,6 +77,20 @@ export function AccountMenu({ className }: { className?: string }) {
               </span>
             ) : null}
           </Link>
+          {unlocked ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                lock.mutate(undefined);
+                setOpen(false);
+              }}
+              className="flex min-h-11 items-center gap-3 rounded-[14px] px-3 text-left text-[14px] font-bold hover:bg-surface"
+            >
+              <Lock aria-hidden strokeWidth={2} className="size-[18px] text-fg-muted" />
+              <span className="flex-1">Lock settings</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

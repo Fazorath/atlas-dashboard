@@ -1,0 +1,25 @@
+# A Custom module: one YAML file in config/custom/ is one module. This one
+# brings a new Area, "Links", with a single Links widget. Edit it, or delete
+# the file to remove it — nothing else refers to it.
+atlas: 1                 # the format version; every module file starts with it
+name: Links
+
+# `area: <existing area>` (health, money, habits, weather ...) adds widgets to
+# an Area Atlas already has. A mapping brings a new one, keyed by this file's
+# name (`links`).
+area:
+  label: Links
+  icon: link             # any Lucide icon name (lucide.dev/icons)
+  accent: sky            # a palette name, or a hex colour like "#3aa0ff"
+
+widgets:
+  - id: favourites       # lowercase a-z, 0-9 and _; unique in this file
+    type: links
+    title: Favourites
+    links:
+      # icon: a Lucide name, or `si:<name>` from the dashboard-icons set
+      # (fetched from its CDN by your browser — leave it out to stay offline).
+      - {label: Atlas on GitHub, url: "https://github.com/Fazorath/atlas-dashboard", icon: si:github}
+      - {label: Home Assistant docs, url: "https://www.home-assistant.io/docs/", icon: house}
+      - {label: Uptime Kuma, url: "https://github.com/louislam/uptime-kuma", icon: activity}
+      - {label: Open-Meteo, url: "https://open-meteo.com/", icon: cloud-sun}

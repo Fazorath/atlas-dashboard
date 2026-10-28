@@ -13,7 +13,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { localDate, parseLocalDate } from "@/lib/habits";
+import { parseLocalDate, zonedDate } from "@/lib/habits";
 
 export type ConnectionState = "setup" | "disconnected" | "connected" | "expired";
 
@@ -102,9 +102,12 @@ export function useSleep(days = 7) {
 
 /** Ask the API for Google's consent URL. A localhost redirect can't come back
     to this page, so that flow opens Google in a new tab and leaves this one
-    waiting for the pasted address; an HTTPS redirect just navigates. */
-export async function startConnect(pasteBack: boolean): Promise<void> {
-  const { url } = await api<{ url: string }>("/sleep/connect");
+    waiting for the pasted address; an HTTPS redirect just navigates, and
+    Google's answer comes back to `returnTo` — Status, or Setup's last step. */
+export async function startConnect(pasteBack: boolean, returnTo = "/status"): Promise<void> {
+  const { url } = await api<{ url: string }>(
+    `/sleep/connect?return_to=${encodeURIComponent(returnTo)}`,
+  );
   if (pasteBack) window.open(url, "_blank", "noopener");
   else window.location.assign(url);
 }
@@ -152,7 +155,7 @@ export function needsReconnect(conn: Connection | undefined): "expired" | "soon"
 export function reconnectByLabel(iso: string, now = new Date()): string {
   const at = new Date(iso);
   const days = Math.round(
-    (parseLocalDate(localDate(at)).getTime() - parseLocalDate(localDate(now)).getTime()) /
+    (parseLocalDate(zonedDate(at)).getTime() - parseLocalDate(zonedDate(now)).getTime()) /
       86_400_000,
   );
   const time = at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -183,7 +186,7 @@ export function formatPercent(fraction: number | null | undefined): string | nul
 
 /** "Last night" / "Yesterday" / "Thursday" — which night the hero shows. */
 export function nightLabel(wakeDate: string, now = new Date()): string {
-  const today = parseLocalDate(localDate(now));
+  const today = parseLocalDate(zonedDate(now));
   const diff = Math.round((today.getTime() - parseLocalDate(wakeDate).getTime()) / 86_400_000);
   if (diff <= 0) return "Last night";
   if (diff === 1) return "The night before";

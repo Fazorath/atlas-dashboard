@@ -1,0 +1,15 @@
+atlas: 1
+name: Homelab
+area:
+  label: Homelab
+  icon: server
+  accent: work
+source:
+  url: http://demo-json:8000/services.json
+widgets:
+  - id: services
+    type: list
+    title: Services
+    items: "."
+    row: {title: name, detail: uptime, status: state}
+    status_map: {ok: [up], warn: [slow], bad: [down]}

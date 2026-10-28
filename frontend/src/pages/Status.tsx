@@ -4,22 +4,33 @@
    shows a single Problem chip that leads here. Later it also holds accounts and
    connections; today the one connection with controls is Google Health, whose
    Testing-mode sign-in needs a click once a week (ADR 0002 moved it here from
-   the Health screen).
+   the Health screen). Notifications are switched on and tuned here too.
+
+   Below them, Settings: Setup's forms one section at a time (ADR 0008),
+   Owner-only — an unclaimed install is claimed here, a locked device unlocks
+   here. A hand edit of config/ that didn't apply shows at the top.
 
    Google's consent redirect lands on this screen, as /status?connected=1 or
    ?oauth_error=…, so the outcome is shown on the card that started it. */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { KeyRound, MapPin, Puzzle, RefreshCw, UserRound } from "lucide-react";
+import { Link } from "react-router-dom";
 
+import { CustomSecretsCard } from "@/components/settings/CustomSecrets";
+import { NotificationsCard } from "@/components/notify/NotificationsCard";
+import { ModulesSection } from "@/components/settings/Modules";
+import { ChangePassphraseForm, ClaimForm, UnlockForm } from "@/components/settings/OwnerForms";
+import { PlaceForm, YouForm } from "@/components/settings/YouPlace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ConnectionCard } from "@/components/widgets/fitbit-connection";
+import { ConnectionCard, useOAuthFlash } from "@/components/widgets/fitbit-connection";
 import { api, type SourceStatus, type SyncResult } from "@/lib/api";
+import { useConfig } from "@/lib/config";
+import { useLock, useOwner } from "@/lib/owner";
+import { useSettings } from "@/lib/settings";
 import { AREAS } from "@/lib/sections";
 import { useSleep } from "@/lib/sleep";
 import {
@@ -36,6 +47,7 @@ export function Status() {
   const flash = useOAuthFlash();
   const problems = problemsOf(sources.all);
   const conn = sleep.data?.connection;
+  const configProblem = useConfig()?.config_problem;
 
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col gap-[14px] lap:gap-5">
@@ -51,6 +63,15 @@ export function Status() {
               : `${problems.length} ${problems.length === 1 ? "source needs" : "sources need"} you`}
         </p>
       </header>
+
+      {configProblem ? (
+        <div className="flex flex-col gap-1 rounded-card border border-due-track bg-due-tint px-4 py-3">
+          <p className="text-[14px] font-bold text-due-soft">A change to config/ didn&rsquo;t apply</p>
+          <p className="text-[12px] leading-snug font-semibold break-words text-fg-muted">
+            {configProblem} — Atlas keeps using the last settings that worked until the file is fixed.
+          </p>
+        </div>
+      ) : null}
 
       <Card title="Sources" bodyClassName="pt-3">
         {sources.isPending ? (
@@ -77,7 +98,79 @@ export function Status() {
       {conn && conn.state !== "setup" ? (
         <ConnectionCard conn={conn} flash={flash} fetchedAt={sleep.data?.fetched_at ?? null} />
       ) : null}
+
+      <CustomSecretsCard />
+
+      <NotificationsCard />
+
+      <SettingsSections />
     </div>
+  );
+}
+
+/** Setup's forms, for the Owner. Everyone else sees how to become one. */
+function SettingsSections() {
+  const owner = useOwner();
+  const unlocked = owner.data?.unlocked ?? false;
+  const settings = useSettings(unlocked);
+  const lock = useLock();
+
+  if (owner.isPending || owner.isError) return null;
+  if (!owner.data.claimed) {
+    return (
+      <Card title="Claim this Atlas" icon={KeyRound} bodyClassName="flex flex-col gap-4 pt-3">
+        <p className="text-[13px] leading-snug font-semibold text-fg-muted">
+          Nobody owns this install yet, so nobody can change its settings. Claim it with the setup
+          code from the atlas-api log.
+        </p>
+        <ClaimForm />
+      </Card>
+    );
+  }
+  if (!unlocked) {
+    return (
+      <Card title="Settings" icon={KeyRound} bodyClassName="flex flex-col gap-4 pt-3">
+        <p className="text-[13px] leading-snug font-semibold text-fg-muted">
+          Only the Owner can change settings. Unlock to edit them on this device for 30 days.
+        </p>
+        <UnlockForm />
+      </Card>
+    );
+  }
+  if (!settings.data) {
+    return settings.isError ? (
+      <Chip tone="error" className="self-start whitespace-normal">
+        Couldn&rsquo;t load settings — {settings.error.message}
+      </Chip>
+    ) : (
+      <Skeleton width="100%" height={180} pulse className="rounded-card" />
+    );
+  }
+  const s = settings.data;
+  return (
+    <>
+      <h2 className="mt-4 text-[22px] leading-none font-extrabold tracking-[-0.02em]">Settings</h2>
+      <Card title="You" icon={UserRound} bodyClassName="pt-3">
+        <YouForm key={`${s.you.name}|${s.you.timezone}`} you={s.you} />
+      </Card>
+      <Card title="Place" icon={MapPin} bodyClassName="pt-3">
+        <PlaceForm key={`${s.place.latitude}|${s.place.longitude}|${s.place.units}`} place={s.place} you={s.you} />
+      </Card>
+      <Card title="Modules" icon={Puzzle} bodyClassName="pt-3">
+        <ModulesSection settings={s} />
+      </Card>
+      <Card title="Owner" icon={KeyRound} bodyClassName="flex flex-col gap-4 pt-3">
+        <ChangePassphraseForm />
+        <div className="flex items-center gap-3 border-t border-divider pt-4">
+          <p className="min-w-0 flex-1 text-[13px] font-semibold text-fg-muted">
+            Lock this device: settings need the passphrase again here.
+          </p>
+          <Button disabled={lock.isPending} onClick={() => lock.mutate(undefined)}>
+            Lock
+          </Button>
+        </div>
+      </Card>
+    </>
   );
 }
 
@@ -115,7 +208,7 @@ function SourceRow({ status }: { status: SourceStatus }) {
         <Chip tone={tone} compact>
           {areaFreshness(status)}
         </Chip>
-        {status.configured ? (
+        {status.configured && !status.source.startsWith("custom:") ? (
           <Button
             variant="ghost"
             size="icon"
@@ -139,7 +232,7 @@ function SourceRow({ status }: { status: SourceStatus }) {
       ) : null}
       {!status.configured ? (
         <p className="text-[12px] leading-snug font-semibold text-fg-muted">
-          Its credentials aren't in .env yet — see the README for this source.
+          Not set up yet — fill in its settings below.
         </p>
       ) : null}
     </div>
@@ -154,19 +247,4 @@ function useSyncNow(source: string) {
     // so everything refetches.
     onSettled: () => client.invalidateQueries(),
   });
-}
-
-/** Google's redirect comes back as /status?connected=1 or ?oauth_error=…;
-    read it once, then drop it from the address so a refresh doesn't repeat it. */
-function useOAuthFlash() {
-  const [params, setParams] = useSearchParams();
-  const [flash] = useState(() => {
-    if (params.get("connected")) return { ok: true, message: "Connected — your last 90 days are in." };
-    const error = params.get("oauth_error");
-    return error ? { ok: false, message: error } : null;
-  });
-  useEffect(() => {
-    if (params.has("connected") || params.has("oauth_error")) setParams({}, { replace: true });
-  }, [params, setParams]);
-  return flash;
 }

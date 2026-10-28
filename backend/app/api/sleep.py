@@ -13,13 +13,13 @@ The one thing this router does that no other does is run an OAuth flow:
                                         when the redirect URI is a localhost one
     POST /api/sleep/disconnect       revoke, forget the token, keep the nights
 
-There is no login yet, as everywhere in Atlas: anyone who can open the
-dashboard can also press Connect.
+Connecting, pasting back and disconnecting are Owner-only (ADR 0008); the
+callback isn't, since Google's redirect carries the one-time `state` instead.
 """
 
 import logging
 from datetime import UTC, date, datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
@@ -30,6 +30,7 @@ from app.clock import local_today
 from app.config import settings
 from app.db import get_session
 from app.nights import main_nights
+from app.owner import require_owner
 from app.models import DailyActivity, OAuthToken, SleepSession, SyncStatus
 from app.schemas.sleep import (
     Activity,
@@ -48,9 +49,8 @@ router = APIRouter(prefix="/sleep", tags=["sleep"])
 
 SOURCE = "sleep"
 NOT_CONFIGURED = (
-    "Create a Google Cloud OAuth client for the Google Health API, put its id and "
-    "secret in .env and its redirect URI in config/modules/google_health.yaml, then "
-    "run docker compose up -d atlas-api."
+    "Create a Google Cloud OAuth client for the Google Health API, then enter its "
+    "id, secret and redirect URI in Health's settings on the Status screen."
 )
 NOT_CONNECTED = "Connect your Fitbit's Google account to start archiving sleep."
 NO_DATA = "Connected — no nights archived yet. The first sync pulls 90 days."
@@ -213,13 +213,22 @@ async def sleep_history(
 
 # --- Connecting ------------------------------------------------------------
 
-@router.get("/connect")
-async def connect() -> dict[str, str]:
+@router.get("/connect", dependencies=[Depends(require_owner)])
+async def connect(return_to: str = google_health.DEFAULT_RETURN) -> dict[str, str]:
     """Where to send the browser for Google's consent screen. JSON rather than a
-    redirect so a misconfiguration is an error the page can show."""
+    redirect so a misconfiguration is an error the page can show. Google's
+    answer comes back to `return_to` — a path on this Atlas, like /setup."""
     if not settings.google_health_configured:
         raise HTTPException(status_code=409, detail=NOT_CONFIGURED)
-    return {"url": google_health.authorization_url()}
+    if not google_health.safe_return(return_to):
+        raise HTTPException(status_code=422, detail="return_to must be a path on this Atlas")
+    return {"url": google_health.authorization_url(return_to)}
+
+
+def _back(path: str, **outcome: str) -> RedirectResponse:
+    parts = urlsplit(path)
+    query = urlencode([*parse_qsl(parts.query), *outcome.items()])
+    return RedirectResponse(urlunsplit(("", "", parts.path, query, "")), status_code=303)
 
 
 async def _finish(session: AsyncSession, code: str, state: str) -> None:
@@ -233,6 +242,19 @@ async def _finish(session: AsyncSession, code: str, state: str) -> None:
         raise RuntimeError(f"Connected, but the first sync failed — {result.error}")
 
 
+async def _has_real_nights(session: AsyncSession) -> bool:
+    """True once a night that came from Google is archived. Demo nights don't
+    count, so the page never claims 90 days are in over made-up ones."""
+    count = (
+        await session.execute(
+            select(func.count())
+            .select_from(SleepSession)
+            .where(~SleepSession.id.startswith(google_health.DEMO_ID_PREFIX))
+        )
+    ).scalar()
+    return bool(count)
+
+
 @router.get("/oauth/callback", include_in_schema=False)
 async def oauth_callback(
     code: str = "",
@@ -241,19 +263,23 @@ async def oauth_callback(
     session: AsyncSession = Depends(get_session),
 ) -> RedirectResponse:
     """Google's redirect lands here, through nginx and whatever fronts it. Always
-    answers with a redirect back to the Status screen, carrying the outcome."""
+    answers with a redirect back to the screen Connect was pressed on (Status
+    or Setup), carrying the outcome."""
+    back = google_health.return_path(state)
     if error:
-        message = "Google sign-in was cancelled" if error == "access_denied" else f"Google answered {error}"
-        return RedirectResponse(f"/status?oauth_error={quote(message)}", status_code=303)
+        google_health.drop_state(state)
+        cancelled = error == "access_denied"
+        message = "Google sign-in was cancelled" if cancelled else f"Google answered {error}"
+        return _back(back, oauth_error=message)
     try:
         await _finish(session, code, state)
     except (ValueError, RuntimeError) as exc:
         log.warning("google health consent failed: %s", exc)
-        return RedirectResponse(f"/status?oauth_error={quote(str(exc))}", status_code=303)
-    return RedirectResponse("/status?connected=1", status_code=303)
+        return _back(back, oauth_error=str(exc))
+    return _back(back, connected="1" if await _has_real_nights(session) else "empty")
 
 
-@router.post("/oauth/complete", response_model=Connection)
+@router.post("/oauth/complete", response_model=Connection, dependencies=[Depends(require_owner)])
 async def oauth_complete(
     pasted: PastedRedirect, session: AsyncSession = Depends(get_session)
 ) -> Connection:
@@ -266,7 +292,7 @@ async def oauth_complete(
     return await connection(session)
 
 
-@router.post("/disconnect", response_model=Connection)
+@router.post("/disconnect", response_model=Connection, dependencies=[Depends(require_owner)])
 async def disconnect(session: AsyncSession = Depends(get_session)) -> Connection:
     await google_health.disconnect(session)
     return await connection(session)

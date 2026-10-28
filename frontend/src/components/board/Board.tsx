@@ -17,6 +17,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -27,7 +28,8 @@ import { Button } from "@/components/ui/button";
 import { WidgetGallery } from "@/components/board/WidgetGallery";
 import { useBoardLayout, useResetBoard, useSaveBoard } from "@/lib/boards";
 import { cn } from "@/lib/utils";
-import { defaultBoard, resolveLayout, WIDGET_BY_ID } from "@/widgets/registry";
+import { enabledModules } from "@/lib/config";
+import { catchUpBoard, defaultBoard, resolveLayout, WIDGET_BY_ID } from "@/widgets/registry";
 import type { BoardKey, Size, TileSpec, WidgetDef } from "@/widgets/types";
 
 export const SPAN: Record<Size, string> = {
@@ -48,12 +50,15 @@ export function Board({
   board,
   leading,
   trailing,
+  notice,
 }: {
   board: BoardKey;
   /** Left of the toolbar: a Problem chip, a heading. */
   leading?: ReactNode;
   /** Right of the toolbar, after the Edit controls: the avatar on a phone. */
   trailing?: ReactNode;
+  /** Between the toolbar and the grid: a status line the screen owns. */
+  notice?: ReactNode;
 }) {
   const saved = useBoardLayout(board);
   const save = useSaveBoard(board);
@@ -63,21 +68,37 @@ export function Board({
   const [draft, setDraft] = useState<TileSpec[] | null>(null);
   const [gallery, setGallery] = useState(false);
   const editing = draft !== null;
-  const layout = draft ?? resolveLayout(board, saved.data?.layout);
+  // The saved layout, with Widgets of Modules enabled since it was saved
+  // appended once. Written back below, so it happens only once.
+  const caught = useMemo(
+    () => catchUpBoard(board, saved.data?.layout, saved.data?.seen_modules),
+    [board, saved.data?.layout, saved.data?.seen_modules],
+  );
+  const base = caught.layout;
+  const layout = draft ?? resolveLayout(board, base);
+
+  const attempted = useRef<string | null>(null);
+  useEffect(() => {
+    if (!caught.changed || !caught.layout || editing) return;
+    const stamp = JSON.stringify(caught.seen);
+    if (attempted.current === stamp) return; // a failed save isn't retried in a loop
+    attempted.current = stamp;
+    save.mutate({ layout: caught.layout, seen: caught.seen });
+  });
 
   const enter = useCallback(() => {
-    setDraft((d) => d ?? resolveLayout(board, saved.data?.layout));
-  }, [board, saved.data?.layout]);
+    setDraft((d) => d ?? resolveLayout(board, base));
+  }, [board, base]);
 
   const done = () => {
     if (!draft) return;
-    const current = resolveLayout(board, saved.data?.layout);
+    const current = resolveLayout(board, base);
     // Matching the default is stored as "never saved", so the default can
     // improve later without a stale copy pinning this Board to the old one.
     if (same(draft, defaultBoard(board))) {
       if (saved.data?.layout != null) reset.mutate();
     } else if (!same(draft, current)) {
-      save.mutate(draft);
+      save.mutate({ layout: draft, seen: enabledModules() });
     }
     setDraft(null);
     setGallery(false);
@@ -147,6 +168,8 @@ export function Board({
           {trailing}
         </div>
       </div>
+
+      {notice}
 
       {editing ? (
         <p className="sr-only" role="status">

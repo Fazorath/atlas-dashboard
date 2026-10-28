@@ -47,3 +47,5 @@ Some Widgets are too detailed for a home screen and can be placed only on their 
 ## When a Module goes away
 
 Switch a Module off and its Widgets leave every Board. Saved Boards are checked against the Widgets that exist on every load, so a Widget that has gone, or a Size it no longer supports, can never break a Board: the tile is dropped or moved to the nearest Size it has.
+
+Switch a Module on and its default Widgets are added to each Board you had already saved, once, after the Widgets already there. Your arrangement is left as it was, and a Widget you then remove is not added back. A Board saved before Atlas started keeping track is treated the same way: a Module that is on but has no Widget on it yet gets its default Widgets once. (If you had deliberately removed all of a Module's Widgets before then, they come back this one time.)
