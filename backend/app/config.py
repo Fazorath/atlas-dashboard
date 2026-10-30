@@ -164,7 +164,8 @@ class Settings(BaseSettings):
     modules: list[str] | None = None
     #: config/atlas.yaml exists. Without it the install is fresh: Setup opens.
     config_found: bool = False
-    # `demo: true` in atlas.yaml: Canvas and Google Health count as set up and
+    # `demo: true` in atlas.yaml: Canvas, Google Health, Securo and Audiobookshelf
+    # count as set up (Securo and ABS answer with made-up data, never upstream) and
     # their syncs touch nothing, so rows from `python -m app.demo` show as if a
     # real account fed them. Never set on a real install.
     demo: bool = False
@@ -290,11 +291,11 @@ class Settings(BaseSettings):
 
     @property
     def securo_configured(self) -> bool:
-        return bool(self.securo_email and self.securo_password)
+        return self.demo or bool(self.securo_email and self.securo_password)
 
     @property
     def abs_configured(self) -> bool:
-        return bool(self.abs_token)
+        return self.demo or bool(self.abs_token)
 
     @property
     def canvas_configured(self) -> bool:

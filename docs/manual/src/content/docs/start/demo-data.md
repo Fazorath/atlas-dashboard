@@ -33,11 +33,11 @@ The demo fills an empty Atlas with believable, entirely made-up data for a stude
 
 3. Reload the page.
 
-You can also add `securo` and `audiobookshelf` to the list. There is no demo data for them, because they are [live](/atlas-dashboard/start/what-atlas-is/#archive-or-live) and store nothing, so their Widgets show "Set up" and Today shows a Problem chip for them. That is what the screenshots here show.
+Add `securo` and `audiobookshelf` too and Money and Listening fill with made-up accounts, bills, goals and books. They are [live](/atlas-dashboard/start/what-atlas-is/#archive-or-live) and store nothing, so demo mode answers for them in place of Securo and Audiobookshelf; nothing is sent upstream.
 
 ## What `demo: true` changes
 
-- **School and Health count as set up without an account**, so their Widgets draw the seeded rows as if Canvas and Google fed them.
+- **School, Health, Money and Listening count as set up without an account**, so their Widgets draw the seeded rows (or, for Money and Listening, the made-up data) as if Canvas, Google, Securo and Audiobookshelf fed them.
 - **Their syncs reach no upstream and rewrite nothing**: cron still runs them, which keeps Freshness current, but the seeded rows stay put.
 - The seed script refuses to run without it.
 
