@@ -11,8 +11,9 @@
 # .env or docker-compose.override.yml) to a temp folder and run there under
 # its own compose project, on its own loopback ports, with a fresh database
 # filled by `python -m app.demo` (persona "Sam"). Weather is real: it syncs
-# Open-Meteo for the example coordinates. Money and Listening have no demo
-# data, so they show as "needs setup".
+# Open-Meteo for the example coordinates. Money and Listening answer from
+# made-up data (app/demo_live.py), and the demo Homelab module (demo/homelab.yaml,
+# fed by a tiny static JSON server) is installed so Today shows a Custom widget.
 #
 # Needs docker and network access. The pictures are taken by the Playwright
 # Python image with --network host, and land in docs/manual/src/assets/screens/.
@@ -34,7 +35,9 @@ WORK="/tmp/atlas-manualshots"
 PLAYWRIGHT_IMAGE="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright/python:v1.55.0-noble}"
 FFMPEG_IMAGE="${FFMPEG_IMAGE:-docker.io/jrottenberg/ffmpeg:7.1-alpine}"
 JSON_IMAGE="docker.io/library/python:3.13-alpine"
-GIF_MAX_BYTES=5000000
+GIF_MAX_BYTES=4000000
+# The GIF never runs longer than this (the previous one was 12.7 s).
+GIF_MAX_SECONDS=12.7
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
@@ -84,8 +87,7 @@ WEB_PORT=$WEB_PORT
 TZ=America/New_York
 EOF
 
-  # Every module on; the four that need no account get demo rows or real
-  # weather, Money and Listening stay unset on purpose.
+  # Every module on; demo mode fills all of them, weather is the one real source.
   mkdir -p "$WORK/config/modules"
   cp "$REPO/config.example/modules/open_meteo.yaml" "$WORK/config/modules/"
   cat >"$WORK/config/atlas.yaml" <<'EOF'
@@ -103,6 +105,8 @@ demo: true
 EOF
 
   mkdir -p "$WORK/config/custom"
+  # Stills have the Homelab module installed from the start; the GIF drops it on camera.
+  [ -z "${DEMO_MODULE_ON_CAMERA:-}" ] && cp "$HERE/demo/homelab.yaml" "$WORK/config/custom/"
   if [ -n "${DEMO_JSON:-}" ]; then
     mkdir -p "$WORK/demo-json"
     cp "$HERE/demo/services.json" "$WORK/demo-json/"
@@ -160,8 +164,8 @@ gif() {
     set -- $setting; width=$1; fps=$2
     docker run --rm --user "$(id -u):$(id -g)" -v "$video:/work" --entrypoint ffmpeg "$FFMPEG_IMAGE" \
       -v error -y -i /work/demo.webm \
-      -vf "fps=$fps,scale=$width:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer:bayer_scale=4" \
-      -loop 0 /work/readme-demo.gif
+      -vf "fps=$fps,trim=start_frame=1,setpts=PTS-STARTPTS,scale=$width:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=bayer:bayer_scale=4" \
+      -t "$GIF_MAX_SECONDS" -loop 0 /work/readme-demo.gif
     size=$(stat -c %s "$video/readme-demo.gif")
     echo "readme-demo.gif at ${width}px, ${fps} fps: $size bytes"
     [ "$size" -le "$GIF_MAX_BYTES" ] && break
@@ -180,10 +184,10 @@ down() {
 }
 
 case "${1:-all}" in
-  up) up ;;
+  up) DEMO_JSON=1; up ;;
   shoot) shoot ;;
   down) down ;;
-  all) trap down EXIT; up; shoot ;;
-  gif) trap down EXIT; DEMO_JSON=1; up; gif ;;
+  all) trap down EXIT; DEMO_JSON=1; up; shoot ;;
+  gif) trap down EXIT; DEMO_JSON=1; DEMO_MODULE_ON_CAMERA=1; up; gif ;;
   *) echo "usage: $0 [up|shoot|gif|down]" >&2; exit 2 ;;
 esac

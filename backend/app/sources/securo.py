@@ -33,6 +33,7 @@ from typing import Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import demo_live
 from app.config import settings
 
 log = logging.getLogger(__name__)
@@ -406,12 +407,16 @@ def parse_trend(payload: Any) -> list[MonthPoint]:
 
 
 async def fetch_snapshot() -> MoneySnapshot:
+    if settings.demo:
+        return MoneySnapshot(**demo_live.snapshot(datetime.now(UTC)))
     async with _client() as client:
         payload = await _get(client, "/api/dashboard/summary")
     return parse_snapshot(payload or {}, datetime.now(UTC))
 
 
 async def fetch_categories(month: date | None = None) -> list[CategorySpend]:
+    if settings.demo:
+        return [CategorySpend(**c) for c in demo_live.categories()]
     params = {"month": month.isoformat()} if month else None
     async with _client() as client:
         payload = await _get(client, "/api/dashboard/spending-by-category", params)
@@ -419,6 +424,8 @@ async def fetch_categories(month: date | None = None) -> list[CategorySpend]:
 
 
 async def fetch_trend(months: int = TREND_MONTHS) -> list[MonthPoint]:
+    if settings.demo:
+        return [MonthPoint(**p) for p in demo_live.trend(max(1, min(TREND_MONTHS_MAX, months)))]
     months = max(1, min(TREND_MONTHS_MAX, months))
     async with _client() as client:
         payload = await _get(client, "/api/dashboard/monthly-trend", {"months": months})
@@ -495,6 +502,8 @@ def parse_goals(payload: Any) -> list[Goal]:
 
 
 async def fetch_accounts() -> list[Account]:
+    if settings.demo:
+        return [Account(**a) for a in demo_live.accounts()]
     async with _client() as client:
         return parse_accounts(await _get(client, "/api/accounts"))
 
@@ -502,12 +511,16 @@ async def fetch_accounts() -> list[Account]:
 async def fetch_bills(start: date, end: date) -> list[Bill]:
     """Projected outflows in [start, end] — what Securo expects to leave from
     recurring transactions you have set up there."""
+    if settings.demo:
+        return [Bill(**b) for b in demo_live.bills(start, end)]
     params = {"from": start.isoformat(), "to": end.isoformat()}
     async with _client() as client:
         return parse_bills(await _get(client, "/api/dashboard/projected-transactions", params))
 
 
 async def fetch_goals() -> list[Goal]:
+    if settings.demo:
+        return [Goal(**g) for g in demo_live.goals()]
     async with _client() as client:
         return parse_goals(await _get(client, "/api/goals"))
 
@@ -515,6 +528,8 @@ async def fetch_goals() -> list[Goal]:
 async def fetch_uncategorised_count(start: date, end: date) -> int:
     """How many outgoing transactions in [start, end] have no category — the
     "N transactions" in Money's nudge. One row is asked for; `total` is read."""
+    if settings.demo:
+        return 0
     params = {
         "uncategorized": "true",
         "type": "debit",
@@ -559,6 +574,8 @@ def parse_daily_out(items: Any, start: date, end: date) -> list[DayOut]:
 async def fetch_daily_out(start: date, end: date) -> list[DayOut]:
     """Out per day over [start, end], read page by page from the transaction
     list — Securo has no per-day aggregate."""
+    if settings.demo:
+        return [DayOut(**d) for d in demo_live.daily_out(start, end)]
     params: dict[str, Any] = {
         "type": "debit",
         "exclude_ignored": "true",

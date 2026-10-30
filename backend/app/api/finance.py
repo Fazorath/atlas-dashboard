@@ -38,7 +38,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/finance", tags=["finance"])
 
 NOT_CONFIGURED = (
-    "Add SECURO_EMAIL and SECURO_PASSWORD to .env, then run docker compose up -d atlas-api."
+    "Add your Securo login in Setup (or SECURO_EMAIL and SECURO_PASSWORD in .env)."
 )
 
 #: How many category rows the Money page will draw before the list stops being

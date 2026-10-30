@@ -55,7 +55,7 @@ Your balance, this month's **In** and **Out**, where the money went by category,
 
 ## Config keys
 
-`config/modules/securo.yaml`, plus `SECURO_EMAIL` and `SECURO_PASSWORD` in `.env`.
+`config/modules/securo.yaml`, plus the Securo login: enter it in Setup in the browser, or set `SECURO_EMAIL` and `SECURO_PASSWORD` in `.env` (which wins).
 
 | Key | Default | Meaning |
 |---|---|---|
