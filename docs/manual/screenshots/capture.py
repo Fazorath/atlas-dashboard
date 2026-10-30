@@ -88,7 +88,7 @@ def put_services_on_today(page: Page, base: str) -> None:
     page.wait_for_timeout(900)
     page.get_by_role("button", name="Add", exact=True).last.click()
     page.wait_for_timeout(900)
-    # Size L shows every row, so the card is full rather than "+4 more".
+    # Size L shows all five rows, so the card has no "+N more" line.
     page.get_by_role("radiogroup", name="Services size").get_by_label("Size L").click()
     page.wait_for_timeout(900)
     page.get_by_role("button", name="Done", exact=True).click()
