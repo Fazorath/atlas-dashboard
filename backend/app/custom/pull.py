@@ -99,6 +99,11 @@ async def _get(source: Source, secrets: dict[str, str]) -> Any:
                     chunks.append(chunk)
     except PullProblem:
         raise
+    except UnicodeEncodeError:
+        # Header values are ASCII; the error text is left out because it could quote the value.
+        raise PullProblem(
+            "bad_header", f"a header (or a secret in one) for {host} has a character HTTP can't carry; use plain ASCII"
+        ) from None
     except httpx.TimeoutException as exc:
         raise PullProblem("timeout", f"{host} didn't answer within {TIMEOUT_S:.0f} s") from exc
     except httpx.HTTPError as exc:
