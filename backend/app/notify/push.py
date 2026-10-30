@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import PushDevice, PushKeys
+from app.notify.endpoint import is_push_service
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,18 @@ CONTACT = "https://fazorath.github.io"
 #: shift reminder that arrives half a day late is only noise.
 TTL_SECONDS = 4 * 3600
 TIMEOUT_SECONDS = 10
+REFUSED = (
+    "This address isn't a browser push service, so Atlas won't send to it. "
+    "Remove this device and turn notifications on again."
+)
+
+
+class _NoRedirects(requests.Session):
+    """Atlas only POSTs to addresses it checked, so a push service's 3xx is a failure."""
+
+    def request(self, method, url, **kwargs):  # type: ignore[override]
+        kwargs["allow_redirects"] = False
+        return super().request(method, url, **kwargs)
 
 
 async def keys(session: AsyncSession) -> PushKeys:
@@ -57,14 +70,16 @@ async def keys(session: AsyncSession) -> PushKeys:
 
 
 def _send_one(endpoint: str, p256dh: str, auth: str, pem: str, data: str) -> None:
-    webpush(
-        {"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}},
-        data=data,
-        vapid_private_key=Vapid.from_pem(pem.encode()),
-        vapid_claims={"sub": CONTACT},
-        ttl=TTL_SECONDS,
-        timeout=TIMEOUT_SECONDS,
-    )
+    with _NoRedirects() as session:
+        webpush(
+            {"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}},
+            data=data,
+            vapid_private_key=Vapid.from_pem(pem.encode()),
+            vapid_claims={"sub": CONTACT},
+            ttl=TTL_SECONDS,
+            timeout=TIMEOUT_SECONDS,
+            requests_session=session,
+        )
 
 
 def _gone(exc: Exception) -> bool:
@@ -93,17 +108,29 @@ async def send(
     pem = (await keys(session)).private_pem
     data = json.dumps(payload)
     rows = [(d.id, d.endpoint, d.p256dh, d.auth) for d in devices]
-    results = await asyncio.gather(
-        *(asyncio.to_thread(_send_one, e, p, a, pem, data) for _, e, p, a in rows),
-        return_exceptions=True,
+    allowed = [row for row in rows if is_push_service(row[1])]
+    results = dict(
+        zip(
+            (row[0] for row in allowed),
+            await asyncio.gather(
+                *(asyncio.to_thread(_send_one, e, p, a, pem, data) for _, e, p, a in allowed),
+                return_exceptions=True,
+            ),
+            strict=True,
+        )
     )
 
     ok = 0
     now = datetime.now(UTC)
-    for (device_id, *_), result in zip(rows, results, strict=True):
+    for device_id, *_ in rows:
         device = await session.get(PushDevice, device_id)
         if device is None:
             continue
+        if device_id not in results:
+            log.warning("push device %s has an address that isn't a push service; not sending", device_id)
+            device.last_error = REFUSED
+            continue
+        result = results[device_id]
         if result is None:
             ok += 1
             device.last_ok_at, device.last_error = now, None

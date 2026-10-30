@@ -104,6 +104,9 @@ async def _get(source: Source, secrets: dict[str, str]) -> Any:
         raise PullProblem(
             "bad_header", f"a header (or a secret in one) for {host} has a character HTTP can't carry; use plain ASCII"
         ) from None
+    except httpx.InvalidURL:
+        # The filled-in URL can hold a secret, so neither it nor the error text is quoted.
+        raise PullProblem("bad_url", f"the URL for {host} isn't one Atlas can use") from None
     except httpx.TimeoutException as exc:
         raise PullProblem("timeout", f"{host} didn't answer within {TIMEOUT_S:.0f} s") from exc
     except httpx.HTTPError as exc:
