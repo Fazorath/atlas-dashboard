@@ -2,7 +2,9 @@ import hashlib
 from datetime import datetime, time
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from urllib.parse import urlsplit
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.sync import SyncResult
 
@@ -59,12 +61,38 @@ class SubscriptionKeys(BaseModel):
     auth: str = Field(min_length=1, max_length=100)
 
 
+#: Hosts a browser's push service lives on (Chrome/Edge, Firefox, Safari,
+#: Windows). Atlas POSTs to the endpoint, so anything else would let a caller
+#: aim the server at an address on your network.
+PUSH_HOSTS = (
+    "fcm.googleapis.com",
+    "push.services.mozilla.com",
+    "push.apple.com",
+    "notify.windows.com",
+)
+
+
 class SubscribeIn(BaseModel):
     """`PushSubscription.toJSON()`, plus a label for the device list."""
 
     endpoint: str = Field(pattern=r"^https://", max_length=2000)
     keys: SubscriptionKeys
     label: str = Field(default="This device", max_length=80)
+
+    @field_validator("endpoint")
+    @classmethod
+    def _push_service(cls, endpoint: str) -> str:
+        parts = urlsplit(endpoint)
+        host = (parts.hostname or "").lower()
+        ok = (
+            parts.scheme == "https"
+            and not parts.username
+            and parts.port in (None, 443)
+            and any(host == h or host.endswith("." + h) for h in PUSH_HOSTS)
+        )
+        if not ok:
+            raise ValueError("not a browser push service address")
+        return endpoint
 
 
 class AlertIn(BaseModel):
