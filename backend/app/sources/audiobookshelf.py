@@ -47,6 +47,8 @@ from typing import Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import demo_live
+from app.clock import local_today
 from app.config import settings
 
 log = logging.getLogger(__name__)
@@ -301,6 +303,13 @@ def parse_listening(
 
 async def fetch_listening() -> Listening:
     """One round trip's worth of the three reads the card needs."""
+    if settings.demo:
+        now = datetime.now(UTC)
+        shelf = [Book(**b) for b in demo_live.books(now)]
+        days = demo_live.listening_days()
+        # total_s is a made-up lifetime: about a year at this pace.
+        return Listening(current=shelf[0], in_progress=shelf, today_s=days[local_today().isoformat()],
+                         total_s=sum(days.values()) * 4, fetched_at=now)
     async with _client() as client:
         items, me, stats = await asyncio.gather(
             _get(client, "/api/me/items-in-progress"),
@@ -313,6 +322,10 @@ async def fetch_listening() -> Listening:
 async def fetch_stats() -> ListeningStats:
     """Daily listening and finished books. Titles come from the stats payload's
     own `items` where ABS included them, else one item read each."""
+    if settings.demo:
+        now = datetime.now(UTC)
+        return ListeningStats(days=demo_live.listening_days(),
+                              finished=[FinishedBook(**b) for b in demo_live.finished(now)], fetched_at=now)
     async with _client() as client:
         stats, me = await asyncio.gather(
             _get(client, "/api/me/listening-stats"),
@@ -379,6 +392,8 @@ async def fetch_cover(item_id: str, width: int = COVER_WIDTH) -> tuple[bytes, st
     network with a view of the page. So atlas-api fetches it and re-serves it
     same-origin, which is the same reason Securo is proxied.
     """
+    if settings.demo:
+        return demo_live.cover(item_id)
     async with _client() as client:
         response = await client.get(f"/api/items/{item_id}/cover", params={"width": width})
         if response.status_code >= 400:

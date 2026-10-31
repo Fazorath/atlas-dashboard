@@ -74,6 +74,27 @@ def shot(page: Page, out: Path, name: str, full: bool = False) -> None:
     print("wrote", path.name)
 
 
+def put_services_on_today(page: Page, base: str) -> None:
+    """Add the demo Homelab module's Services list to Today, as a reader would."""
+    page.goto(base + "/")
+    settle(page)
+    if page.locator('[data-tile="custom.homelab.services"]').count():
+        return
+    page.get_by_label("Edit this board").click()
+    page.wait_for_timeout(600)
+    page.get_by_role("button", name="Add").click()
+    page.wait_for_timeout(600)
+    page.get_by_role("tab", name="Homelab").click()
+    page.wait_for_timeout(900)
+    page.get_by_role("button", name="Add", exact=True).last.click()
+    page.wait_for_timeout(900)
+    # Size L shows all five rows, so the card has no "+N more" line.
+    page.get_by_role("radiogroup", name="Services size").get_by_label("Size L").click()
+    page.wait_for_timeout(900)
+    page.get_by_role("button", name="Done", exact=True).click()
+    page.wait_for_timeout(900)
+
+
 def main(base: str, out: Path) -> None:
     assert_demo(base)
     out.mkdir(parents=True, exist_ok=True)
@@ -90,6 +111,8 @@ def main(base: str, out: Path) -> None:
                 reduced_motion="reduce",
             )
             page = ctx.new_page()
+            if size == "desktop":
+                put_services_on_today(page, base)
             for stem, route, sizes, full in SCREENS:
                 if size not in sizes:
                     continue

@@ -31,7 +31,7 @@ import { R, WidgetCard, type Problem } from "@/widgets/frame";
 import type { WidgetDef, WidgetProps } from "@/widgets/types";
 
 const PROBLEM: Problem = { chip: "Unreachable", text: "Securo isn't answering — check it's running." };
-const SETUP = "Add your Securo login to .env to switch this on.";
+const SETUP = "Add your Securo login in Setup to switch this on.";
 const BILL_DAYS = 7;
 
 function useMoney() {
