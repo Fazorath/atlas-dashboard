@@ -18,6 +18,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 
 import { AccountMenu } from "@/components/layout/AccountMenu";
+import { AutoWhatsNew } from "@/components/layout/WhatsNew";
 import { navSections } from "@/lib/sections";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +77,7 @@ export function AppShell() {
       </div>
 
       <TabBar />
+      <AutoWhatsNew />
     </div>
   );
 }

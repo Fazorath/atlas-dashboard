@@ -5,11 +5,13 @@ description: What to back up, how to dump and restore the database, and what's s
 
 ## What to back up
 
+Three things, and together they are the whole install: `.env`, `config/` and the `pgdata` volume.
+
 | What | Where | Why |
 |---|---|---|
-| The database | the `pgdata` volume | Habit ticks, work shifts, School ticks, Board layouts and the archives. Some of it exists nowhere else. |
-| `config/` | the repo folder | Your settings. Small, easy to rebuild, but no reason to. |
-| `.env` | the repo folder | Your secrets. Back it up somewhere as private as the original, or not at all. |
+| The database | the `pgdata` volume (the database) | Habit ticks, work shifts, School ticks, Board layouts and the archives. Some of it exists nowhere else. |
+| `config/` | the install folder | Your settings. Small, easy to rebuild, but no reason to. |
+| `.env` | the install folder | Your secrets. Back it up somewhere as private as the original, or not at all. |
 
 What's **not** worth backing up: Money and Listening store nothing in Atlas, and the weather archive can't be refetched for past hours, but losing it costs only history.
 
@@ -65,7 +67,7 @@ docker compose start atlas-api atlas-cron
 
 This is for a dump made by the version you're running. For a dump from an older version, follow [Rolling back](/atlas-dashboard/operate/updating/#rolling-back) instead.
 
-On a new machine: clone, copy over `config/` and `.env`, `docker compose up -d atlas-db`, restore as above, then `docker compose up -d --build`.
+On a new machine: run the installer (or clone, for a source build), copy over `config/` and `.env`, `docker compose up -d atlas-db`, restore as above, then `docker compose up -d` (`docker compose up -d --build` for a source build). For an installed Atlas, the restored `.env` pins the version the dump was made with.
 
 ## Treat the dump as sensitive
 

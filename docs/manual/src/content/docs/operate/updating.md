@@ -7,9 +7,27 @@ Atlas updates in place. Your data lives in the database volume and your settings
 
 ## The short version
 
+Installed with the one-command installer? Your install pins a version in `.env` (`ATLAS_VERSION`). To move to a newer release, [back up](/atlas-dashboard/operate/backups/) first, then either edit that line:
+
 ```bash
 cd atlas
-# 1. back up first: see Backups
+$EDITOR .env        # ATLAS_VERSION=<new version>
+docker compose pull
+docker compose up -d
+```
+
+or re-run the installer from the folder that holds `atlas/` (or with the same `ATLAS_DIR` you installed with, otherwise it makes a second, empty install), with the version you want. It updates that one line, keeps your secrets and `config/`, then pulls and restarts:
+
+```bash
+curl -fsSL https://github.com/Fazorath/atlas-dashboard/releases/latest/download/install.sh | ATLAS_VERSION=<new version> sh
+```
+
+The versions are on the [Releases](https://github.com/Fazorath/atlas-dashboard/releases) page, with what changed in each.
+
+Built from source instead? Back up, then:
+
+```bash
+cd atlas
 git pull
 docker compose up -d --build
 ```
@@ -31,7 +49,7 @@ A key Atlas doesn't know only produces a warning in the log, and a missing one f
 
 ## Pin a version
 
-To stay on a known version, check out a tag or commit instead of following `main`:
+An installed Atlas is already pinned: it stays on `ATLAS_VERSION` until you change it. A source build can stay on a known version by checking out a tag or commit instead of following `main`:
 
 ```bash
 git fetch --tags
@@ -45,7 +63,19 @@ A checked-out tag doesn't follow `main`, so `git pull` stops working. To follow 
 
 Migrations only go forward, so going back to an older version means going back to the [backup](/atlas-dashboard/operate/backups/) you took before updating. Anything written since that dump is lost.
 
-Do it in this order. The newer code must not start against the restored data, and the restore has to go into an empty database:
+**Installed from a release:** from the install folder, in this order:
+
+```bash
+docker compose stop atlas-api atlas-cron
+$EDITOR .env        # ATLAS_VERSION=<old version>
+docker compose pull
+docker compose exec -T atlas-db dropdb -U atlas --force atlas
+docker compose exec -T atlas-db createdb -U atlas atlas
+docker compose exec -T atlas-db pg_restore -U atlas -d atlas < ~/atlas-backups/atlas-2026-10-01.dump
+docker compose up -d
+```
+
+**Built from source,** in this order. The newer code must not start against the restored data, and the restore has to go into an empty database:
 
 ```bash
 docker compose stop atlas-api atlas-cron
@@ -60,6 +90,10 @@ docker compose up -d --build
 Use your `POSTGRES_USER` and `POSTGRES_DB` if you changed them from `atlas`.
 
 Don't skip the drop and create. A plain `pg_restore --clean` only removes what's in the dump, so tables added by the newer version stay behind. When you next update, the newer migrations run again, find those tables already there, and `atlas-api` stops at boot with `DuplicateTable`.
+
+## What's new
+
+The first time you open Atlas after an update, a short sheet shows the version, its date and what changed. Tap **Got it** and it stays gone for that version on that device. Reopen it, or read older releases, from **Status → What's new**. A fresh install doesn't show it, and a build you made yourself from the repo has no version, so it shows nothing. The notes come from `CHANGELOG.md`.
 
 ## Clean up
 

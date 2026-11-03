@@ -23,4 +23,5 @@ Atlas gets a guided **Setup** (issue #14) so a fresh install needs no hand-edite
 - No `config/atlas.yaml` now means Setup, not "every Module on". Setup's defaults write the example config, including `custom/links.yaml` and `welcome.yaml`.
 - Each Module declares its form fields once in the backend; the same renderer can later serve Custom module setup. Each Module's Test fetches with its sync's code but stores nothing.
 - This needs the secret store from the `custom-modules` branch first, plus the Owner passphrase and unlock cookie, which are not built yet. It also fulfils ADR 0007's "Owner gate arrives later" for Notification settings.
+- The one-command installer (`install.sh`) generates `POSTGRES_PASSWORD` and `ATLAS_SECRET_KEY` on the host into the same `.env`, once, and never touches them again, so the reasoning above holds: the key is still a host file you back up, not something the app stores or rewrites.
 - Networking (Compose networks) stays in `docker-compose.override.yml`; Setup only explains an unreachable address. The Schedule photo build flag (`WITH_VISION`) stays in `.env`; Setup only notes it.

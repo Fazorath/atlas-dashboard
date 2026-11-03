@@ -1,0 +1,148 @@
+# Images and releases.
+#
+#   - Pull request / push to main: build all three images for amd64 + arm64,
+#     publish nothing (catches a broken Dockerfile before tagging).
+#   - Tag vX.Y.Z on the public repo: build and push atlas-api, atlas-web and
+#     atlas-cron to GHCR (tags X.Y.Z and X.Y), then create the GitHub Release
+#     with the CHANGELOG.md section as its body, plus install.sh (stamped with
+#     the tag) and the release docker-compose.yml attached. A tag with no CHANGELOG
+#     section fails the job.
+#
+# This file is identical in atlas-private and the public atlas-dashboard repo.
+# Both build; only Fazorath/atlas-dashboard logs in, pushes and releases.
+#
+# One-time setup after the first push: make the three GHCR packages public
+# (package settings -> Change visibility) so anonymous pulls work.
+name: Release
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "cron/**"
+      - "release/**"
+      - "install.sh"
+      - "tests/installer/**"
+      - ".github/scripts/**"
+      - "CHANGELOG.md"
+      - ".github/workflows/release.yml"
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "cron/**"
+      - "release/**"
+      - "install.sh"
+      - "tests/installer/**"
+      - ".github/scripts/**"
+      - "CHANGELOG.md"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs first and gates everything: on a tag, a missing CHANGELOG section fails
+  # here, before any image is pushed.
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pytest && pytest -q .github/scripts
+      - if: startsWith(github.ref, 'refs/tags/v')
+        name: Release notes from CHANGELOG.md
+        run: python3 .github/scripts/changelog_section.py CHANGELOG.md "$GITHUB_REF_NAME" > notes.md
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: notes.md
+
+  # install.sh must be shellcheck-clean and pass its tests (docker is stubbed).
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y bats shellcheck
+      - run: shellcheck install.sh
+      - run: bats tests/installer
+
+  images:
+    needs: changelog
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: atlas-api
+            context: backend
+          - name: atlas-web
+            context: frontend
+          - name: atlas-cron
+            context: cron
+    env:
+      PUBLISH: ${{ github.repository == 'Fazorath/atlas-dashboard' && startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - if: env.PUBLISH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/fazorath/${{ matrix.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.source=https://github.com/Fazorath/atlas-dashboard
+      # The web image embeds CHANGELOG.md for its "What's new" sheet; its build
+      # context is frontend/ alone, so copy the file in.
+      - if: matrix.name == 'atlas-web'
+        run: cp CHANGELOG.md frontend/CHANGELOG.md
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          build-args: ATLAS_VERSION=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+
+  release:
+    if: github.repository == 'Fazorath/atlas-dashboard' && startsWith(github.ref, 'refs/tags/v')
+    needs: [images, installer]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          assets=(release/docker-compose.yml)
+          # install.sh pins the tag it was released with, so stamp it here.
+          mkdir dist
+          sed "s/@ATLAS_TAG@/$GITHUB_REF_NAME/" install.sh > dist/install.sh
+          grep -q "^ATLAS_TAG=\"$GITHUB_REF_NAME\"$" dist/install.sh
+          assets+=(dist/install.sh)
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md "${assets[@]}"

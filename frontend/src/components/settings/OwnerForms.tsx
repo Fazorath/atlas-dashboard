@@ -5,7 +5,8 @@ import { useState, type FormEvent } from "react";
 
 import { FieldRow, SaveError, Saved, inputClass } from "@/components/settings/parts";
 import { Button } from "@/components/ui/button";
-import { CODE_COMMAND, useChangePassphrase, useClaim, useUnlock } from "@/lib/owner";
+import { CODE_COMMAND, CODE_HELP } from "@/lib/setup-code";
+import { useChangePassphrase, useClaim, useUnlock } from "@/lib/owner";
 
 const MIN = 8;
 
@@ -29,8 +30,9 @@ export function ClaimForm({ onDone }: { onDone?: () => void }) {
         htmlFor="claim-code"
         help={
           <>
-            Atlas printed it in its log when it started. On the machine running Atlas:{" "}
+            {CODE_HELP.intro}{" "}
             <code className="font-mono text-fg">{CODE_COMMAND}</code>
+            <span className="mt-1 block">{CODE_HELP.folder}</span>
           </>
         }
       >

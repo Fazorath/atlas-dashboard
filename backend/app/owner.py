@@ -223,6 +223,9 @@ async def require_owner(request: Request, session: AsyncSession = Depends(get_se
     """Dependency for every endpoint that changes this install's setup."""
     row = await get_owner(session)
     if row is None:
+        # An open tab after a reset lands here, not on the Setup screen: make
+        # sure the running api has put a code in its log.
+        setup_code()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Claim this Atlas first.")
     if not cookie_valid(request.cookies.get(COOKIE), row.generation):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unlock with the Owner passphrase.")
@@ -246,7 +249,8 @@ def main(argv: list[str]) -> int:
     asyncio.run(_reset_cli())
     print(
         "Owner passphrase cleared; every device is locked. Your secrets are kept.\n"
-        "Open Atlas to claim it again — the setup code is in: docker compose logs atlas-api"
+        "Reload Atlas in your browser to claim it again; the running api then logs a\n"
+        "new setup code: docker compose logs atlas-api"
     )
     return 0
 

@@ -23,7 +23,9 @@ The demo fills an empty Atlas with believable, entirely made-up data for a stude
    demo: true
    ```
 
-2. Restart the API, seed, and fetch the weather:
+   Weather needs your coordinates. If you went through Setup's Place step it already has them; if not, copy `config.example/modules/open_meteo.yaml` to `config/modules/` and set `latitude` and `longitude`.
+
+2. Restart the API, seed, and fetch the weather (from the install folder, the one with `docker-compose.yml`):
 
    ```bash
    docker compose restart atlas-api
