@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { currentTimezone } from "@/lib/config";
 import { parseLocalDate, zonedDate } from "@/lib/habits";
+import { tickCacheEntry } from "@/lib/school-cache";
 import { formatDateInZone } from "@/lib/today";
 
 export interface Assignment {
@@ -101,36 +102,18 @@ export function useToggleAssignment() {
     onMutate: async (uid) => {
       await client.cancelQueries({ queryKey: SCHOOL_KEY });
       const snapshot = client.getQueriesData({ queryKey: SCHOOL_KEY });
-      const now = Date.now();
-
-      const flip = (a: Assignment): Assignment => {
-        if (a.ics_uid !== uid) return a;
-        const done = !a.done;
-        return {
-          ...a,
-          done,
-          done_at: done ? new Date(now).toISOString() : null,
-          overdue: !done && new Date(a.due_at).getTime() < now,
-        };
-      };
-
-      client.setQueriesData<SchoolSummary | Assignment[]>({ queryKey: SCHOOL_KEY }, (data) => {
-        if (!data) return data;
-        if (Array.isArray(data)) return data.map(flip);
-
-        const upcoming = data.upcoming.map(flip);
-        const was = [...data.upcoming, ...data.overdue].find((a) => a.ics_uid === uid);
-        const weekDelta = was && isThisWeek(was.due_at) ? (was.done ? -1 : 1) : 0;
-        // Overdue rows stay put while ticked, so the row you just hit doesn't
-        // jump out from under you; the refetch below tidies them away.
-        return {
-          ...data,
-          overdue: data.overdue.map(flip),
-          upcoming,
-          week_done: data.week_done + weekDelta,
-        };
-      });
-
+      // A failure here must never stop the POST: React Query skips mutationFn
+      // when onMutate throws. Whatever got changed is restored by onError.
+      try {
+        const now = Date.now();
+        for (const [key, data] of snapshot) {
+          const next = tickCacheEntry(key, data, uid, now, isThisWeek);
+          if (next !== data) client.setQueryData(key, next);
+        }
+      } catch (error) {
+        // The refetch in onSettled puts the truth back.
+        console.warn("school: optimistic tick failed", error);
+      }
       return { snapshot };
     },
 

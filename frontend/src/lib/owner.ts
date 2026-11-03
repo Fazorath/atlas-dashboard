@@ -13,9 +13,6 @@ export interface OwnerState {
 
 export const OWNER_KEY = ["owner"] as const;
 
-/** Where the setup code is, for the screens that ask for it. */
-export const CODE_COMMAND = "docker compose logs atlas-api | grep 'setup code'";
-
 export function useOwner() {
   return useQuery({ queryKey: OWNER_KEY, queryFn: () => api<OwnerState>("/owner") });
 }

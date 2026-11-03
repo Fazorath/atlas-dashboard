@@ -3,9 +3,29 @@ title: Install
 description: Run Atlas with Docker Compose, claim it with the setup code, and put it somewhere only you can reach.
 ---
 
-You need a machine that runs Docker with the Compose plugin, and `git`. Atlas is four small containers; a Raspberry Pi 4 or any home server is plenty.
+## What you need
 
-## 1. Get the code
+Atlas runs on a machine of your own that stays on and has Docker with the Compose plugin: a NAS, a Raspberry Pi 4 or 5, an old laptop or mini PC, or a VPS (about $5 a month is plenty). Atlas is four small containers.
+
+A laptop works too, but Atlas only syncs and keeps its archive while the laptop is awake and on. A hosted Atlas that someone else runs for you doesn't exist; it's your install, on your machine.
+
+If that machine isn't the one in front of you, don't open its ports to the internet. Reach it through an SSH tunnel (`ssh -L 8188:127.0.0.1:8188 <user>@<host>`, then open <http://127.0.0.1:8188> on your own computer) or a private network such as Tailscale. See [Getting to it from your phone](#5-getting-to-it-from-your-phone).
+
+## Quick install
+
+```bash
+curl -fsSL https://github.com/Fazorath/atlas-dashboard/releases/latest/download/install.sh | sh
+```
+
+This makes an `atlas` folder in the current directory (or `$ATLAS_DIR`) with the release `docker-compose.yml`, a `.env` holding two freshly generated secrets, and `config/`. It starts Atlas from the published images (nothing is built on your machine), waits until it answers, then prints the address, the setup code, and a reminder to **back up `atlas/.env`**. It pins the version it came from, so a later `latest` never changes your install by surprise. If port 8188 or 8187 is taken it says so; rerun with `WEB_PORT=` or `API_PORT=` set. Running it again in the same folder keeps your `.env`, `config/` and version and prints the setup code again while nobody has claimed Atlas. Then skip to [Setup](#4-setup).
+
+To follow the steps yourself, or build from source, use the next section.
+
+## Build from source
+
+Steps 1 to 3 are what the installer does for you, except that this builds the images from the code on your machine.
+
+### 1. Get the code
 
 ```bash
 git clone https://github.com/Fazorath/atlas-dashboard.git atlas
@@ -14,7 +34,7 @@ cd atlas
 
 The folder name becomes the Compose project name, so two copies in two folders (a test install beside your real one, say) get their own containers and their own database.
 
-## 2. Two secrets: `.env`
+### 2. Two secrets: `.env`
 
 ```bash
 cp .env.example .env
@@ -42,11 +62,11 @@ Docker Compose expands `$` in `.env`, so an unquoted `POSTGRES_PASSWORD=$ecretPa
 | `WEB_PORT` | `8188` | The dashboard. |
 | `TZ` | `America/New_York` | Container clocks: logs and cron. Atlas's own "today" is the time zone you pick in Setup. |
 | `LOG_LEVEL` | `info` | |
-| `WITH_VISION` | `false` | `true`, `1`, `yes` or `on` (any case) builds in [Work](/atlas-dashboard/modules/work/)'s schedule-photo reader. Rebuild after changing it. |
+| `WITH_VISION` | `false` | `true`, `1`, `yes` or `on` (any case) builds in [Work](/atlas-dashboard/modules/work/)'s schedule-photo reader. Rebuild after changing it. Source builds only: the prebuilt release images never include it. |
 
 The rest of the file lists each Module's secrets. Leave them blank and enter them in Setup instead; one you do set here wins, and Setup shows it as "Set in .env".
 
-## 3. Start it
+### 3. Start it
 
 ```bash
 docker compose up -d --build
@@ -61,6 +81,10 @@ Atlas prints a one-time **setup code** in its log while nobody owns it yet:
 ```bash
 docker compose logs atlas-api | grep 'setup code'
 ```
+
+Run it from the install folder, the one with `docker-compose.yml` in it: the folder the installer set up, or the folder you cloned. Setup's Owner step shows the same command.
+
+**Why the code is in the log.** Atlas has no accounts and no email, so something has to prove that whoever opens the page also runs the machine. The log is that proof: only someone with the host can read it, and that holds whether your traffic arrives directly, through a reverse proxy or over Tailscale, where every request would look local.
 
 Open <http://127.0.0.1:8188>. With no `config/atlas.yaml` yet, every page leads to Setup, four short steps:
 

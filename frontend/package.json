@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "node --test src/lib/photo.test.ts src/lib/today.test.ts src/lib/card-state.test.ts src/lib/draft-offer.test.ts src/lib/api-error.test.ts src/lib/row-source.test.ts src/lib/send-failure.test.ts src/lib/habit-slots.test.ts src/lib/habit-icon.test.ts src/lib/custom-modules.test.ts"
+    "test": "node --test src/lib/photo.test.ts src/lib/today.test.ts src/lib/card-state.test.ts src/lib/draft-offer.test.ts src/lib/api-error.test.ts src/lib/row-source.test.ts src/lib/send-failure.test.ts src/lib/habit-slots.test.ts src/lib/habit-icon.test.ts src/lib/custom-modules.test.ts src/lib/setup-code.test.ts src/lib/school-cache.test.ts src/lib/whats-new.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",

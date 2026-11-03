@@ -6,6 +6,9 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+# The release job passes the tag; "What's new" shows only when it is set.
+ARG ATLAS_VERSION=
+ENV ATLAS_VERSION=$ATLAS_VERSION
 RUN npm run build
 
 

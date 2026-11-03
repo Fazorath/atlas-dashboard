@@ -14,9 +14,11 @@
    ?oauth_error=…, so the outcome is shown on the card that started it. */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, MapPin, Puzzle, RefreshCw, UserRound } from "lucide-react";
+import { KeyRound, MapPin, Megaphone, Puzzle, RefreshCw, UserRound } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import { WhatsNewSheet } from "@/components/layout/WhatsNew";
 import { CustomSecretsCard } from "@/components/settings/CustomSecrets";
 import { NotificationsCard } from "@/components/notify/NotificationsCard";
 import { ModulesSection } from "@/components/settings/Modules";
@@ -33,6 +35,8 @@ import { useLock, useOwner } from "@/lib/owner";
 import { useSettings } from "@/lib/settings";
 import { AREAS } from "@/lib/sections";
 import { useSleep } from "@/lib/sleep";
+import { type Entry } from "@/lib/whats-new";
+import { BUILD_VERSION, ENTRIES } from "@/lib/whats-new-build";
 import {
   areaFreshness,
   freshnessTone,
@@ -103,8 +107,49 @@ export function Status() {
 
       <NotificationsCard />
 
+      <WhatsNewCard />
+
       <SettingsSections />
     </div>
+  );
+}
+
+/** This build's version, and the notes for it and every older release. */
+function WhatsNewCard() {
+  const [open, setOpen] = useState<Entry | null>(null);
+  const current = ENTRIES.find((e) => e.version === BUILD_VERSION);
+  return (
+    <Card title="What’s new" icon={Megaphone} bodyClassName="flex flex-col gap-3 pt-3">
+      <p className="text-[13px] leading-snug font-semibold text-fg-muted">
+        {BUILD_VERSION ? `Atlas ${BUILD_VERSION}` : "A development build, with no release version"}
+      </p>
+      {ENTRIES.length === 0 ? (
+        <p className="text-[13px] leading-snug font-semibold text-fg-muted">No release notes in this build.</p>
+      ) : (
+        <>
+          {current ? (
+            <Button variant="solid" className="self-start" onClick={() => setOpen(current)}>
+              What’s new
+            </Button>
+          ) : null}
+          <ul className="flex flex-col">
+            {ENTRIES.map((e) => (
+              <li key={e.version}>
+                <button
+                  type="button"
+                  onClick={() => setOpen(e)}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 border-t border-divider text-left text-[14px] font-bold"
+                >
+                  {e.version}
+                  <span className="text-[12px] font-semibold text-fg-muted">{e.date}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {open ? <WhatsNewSheet entry={open} onClose={() => setOpen(null)} /> : null}
+    </Card>
   );
 }
 
