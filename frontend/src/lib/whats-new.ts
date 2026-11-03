@@ -76,7 +76,11 @@ export function sheetToShow(store: KeyValueStore, current: string, entries: Entr
   } catch {
     return null;
   }
-  const entry = entries.find((e) => e.version === current) ?? null;
+  // A release candidate (0.1.0-rc1) shows the notes of the version it previews,
+  // like changelog_section.py does for the GitHub Release.
+  const base = current.replace(/-rc\d+$/, "");
+  const entry =
+    entries.find((e) => e.version === current) ?? entries.find((e) => e.version === base) ?? null;
   // A version with no notes shows nothing, but counts as seen so a later
   // rollback or update compares against this one.
   if (!entry) markSeen(store, current);

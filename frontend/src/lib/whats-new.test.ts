@@ -134,3 +134,9 @@ test("the real CHANGELOG.md has a parseable entry for its latest release", () =>
   assert.ok(latest, "no released version found");
   assert.ok(latest.bullets.length >= 1);
 });
+
+test("a release candidate shows the base version's sheet", () => {
+  const store = memory();
+  sheetToShow(store, "0.1.0", entries);
+  assert.equal(sheetToShow(store, "0.2.0-rc1", entries)?.version, "0.2.0");
+});
