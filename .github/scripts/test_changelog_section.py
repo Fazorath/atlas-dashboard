@@ -47,6 +47,11 @@ def test_missing_version_is_none():
     assert extract(CHANGELOG, "0.3.0") is None
 
 
+def test_prerelease_uses_base_version_section():
+    assert extract(CHANGELOG, "v0.1.0-rc1") == extract(CHANGELOG, "0.1.0")
+    assert extract(CHANGELOG, "0.3.0-rc1") is None
+
+
 def test_prefix_version_does_not_match():
     assert extract(CHANGELOG, "0.1") is None
 

@@ -144,5 +144,7 @@ jobs:
           sed "s/@ATLAS_TAG@/$GITHUB_REF_NAME/" install.sh > dist/install.sh
           grep -q "^ATLAS_TAG=\"$GITHUB_REF_NAME\"$" dist/install.sh
           assets+=(dist/install.sh)
+          flags=()
+          case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease) ;; esac
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
-            --notes-file notes.md "${assets[@]}"
+            --notes-file notes.md "${flags[@]}" "${assets[@]}"

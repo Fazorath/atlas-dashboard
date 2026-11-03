@@ -4,6 +4,7 @@
     changelog_section.py CHANGELOG.md 0.1.0   # also accepts v0.1.0
 
 Prints the body under "## [0.1.0] - date" up to the next "## " heading.
+A pre-release such as 0.1.0-rc1 falls back to the 0.1.0 section.
 Exits 1 with a message on stderr when the section is missing or empty, so a tag
 with no release notes fails the release job.
 """
@@ -16,6 +17,14 @@ HEADING = re.compile(r"^##\s+\[?v?([^\]\s]+)\]?(?:\s|$)")
 
 def extract(text: str, version: str) -> str | None:
     version = version.removeprefix("v")
+    body = _section(text, version)
+    if body is None and "-" in version:
+        # A pre-release tag (0.1.0-rc1) uses the notes of the version it previews.
+        body = _section(text, version.split("-", 1)[0])
+    return body
+
+
+def _section(text: str, version: str) -> str | None:
     lines: list[str] = []
     found = False
     for line in text.splitlines():
