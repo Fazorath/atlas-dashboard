@@ -52,6 +52,17 @@ def test_prerelease_uses_base_version_section():
     assert extract(CHANGELOG, "0.3.0-rc1") is None
 
 
+def test_only_rc_suffix_falls_back():
+    assert extract(CHANGELOG, "v0.1.0-beta") is None
+    assert extract(CHANGELOG, "v0.1.0-") is None
+    assert extract(CHANGELOG, "v0.1.0-rc") is None
+
+
+def test_own_prerelease_heading_wins():
+    text = CHANGELOG + "\n## [0.1.0-rc1] - d\n\n- rc note\n"
+    assert extract(text, "v0.1.0-rc1") == "- rc note"
+
+
 def test_prefix_version_does_not_match():
     assert extract(CHANGELOG, "0.1") is None
 

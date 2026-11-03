@@ -7,6 +7,8 @@
 #     with the CHANGELOG.md section as its body, plus install.sh (stamped with
 #     the tag) and the release docker-compose.yml attached. A tag with no CHANGELOG
 #     section fails the job.
+#   - Tag vX.Y.Z-rcN: same, but the notes come from the X.Y.Z section, the Release
+#     is marked pre-release and images get only the X.Y.Z-rcN tag (no X.Y, no latest).
 #
 # This file is identical in atlas-private and the public atlas-dashboard repo.
 # Both build; only Fazorath/atlas-dashboard logs in, pushes and releases.
@@ -145,6 +147,6 @@ jobs:
           grep -q "^ATLAS_TAG=\"$GITHUB_REF_NAME\"$" dist/install.sh
           assets+=(dist/install.sh)
           flags=()
-          case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease) ;; esac
+          case "$GITHUB_REF_NAME" in *-rc[0-9]*) flags+=(--prerelease) ;; esac
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
             --notes-file notes.md "${flags[@]}" "${assets[@]}"
